@@ -9,6 +9,7 @@ import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.db.AppDatabase
+import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import java.time.Instant
 import java.util.UUID
 
@@ -136,6 +137,7 @@ class AnalysisWorker(
                     lastError = null,
                     attemptCount = attempt,
                 )
+                AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
             } catch (e: Exception) {
                 val msg = e.message ?: e.javaClass.simpleName
                 if (attempt <= 1) {
@@ -158,6 +160,7 @@ class AnalysisWorker(
                         )
                     }
                     dao.finishQueue(entry.queueId, status = "FAILED", finishedAt = finishedAt, lastError = msg, attemptCount = attempt)
+                    AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
                 }
             }
         }

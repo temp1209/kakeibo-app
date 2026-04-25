@@ -41,23 +41,41 @@ import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.ui.list.ReceiptsListScreen
 import work.temp1209.kakeibo.ui.settings.SettingsScreen
 import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
+import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 
 class MainActivity : ComponentActivity() {
+    private val deepLinkReceiptId = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        AnalysisNotifications.ensureChannel(this)
+        deepLinkReceiptId.value = intent.getStringExtra(AnalysisNotifications.EXTRA_RECEIPT_ID)
         setContent {
             KakeiboappTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    AppNav(innerPadding = innerPadding)
+                    AppNav(
+                        innerPadding = innerPadding,
+                        deepLinkReceiptId = deepLinkReceiptId.value,
+                        onConsumeDeepLink = { deepLinkReceiptId.value = null },
+                    )
                 }
             }
         }
     }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        deepLinkReceiptId.value = intent.getStringExtra(AnalysisNotifications.EXTRA_RECEIPT_ID)
+    }
 }
 
 @Composable
-private fun AppNav(innerPadding: PaddingValues) {
+private fun AppNav(
+    innerPadding: PaddingValues,
+    deepLinkReceiptId: String?,
+    onConsumeDeepLink: () -> Unit,
+) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val repo = remember { ReceiptRepository(context) }
@@ -65,6 +83,12 @@ private fun AppNav(innerPadding: PaddingValues) {
     // 要件: 起動時に40日超過画像を掃除（冪等）
     LaunchedEffect(Unit) {
         repo.cleanupExpiredImages()
+    }
+
+    LaunchedEffect(deepLinkReceiptId) {
+        val id = deepLinkReceiptId ?: return@LaunchedEffect
+        navController.navigate(Route.ReceiptDetail.create(id))
+        onConsumeDeepLink()
     }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
