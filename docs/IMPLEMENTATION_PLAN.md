@@ -98,6 +98,19 @@
 > 目標: **送信確定 → 即キュー投入 → Gemini解析 → DBへ反映**  
 > ※ 解析はバックグラウンドで順番に（要件の「1件ずつ」）
 
+### Phase2の前提（決定事項）
+- [ ] 方針: Phase2で **Receipt上位情報（店名/合計/レシート日時/支払手段）+ 解析状態** までDBに反映する
+- [ ] 方針: Phase2で **`receipt_items`（明細行）も保存**する（confidence/カテゴリ/必須度をアイテム単位で保持）
+- [ ] 方針: `analysis_queue.status` は `QUEUED/RUNNING/DONE/FAILED` を採用
+- [ ] 方針: リトライ回数は **1回（合計2トライ）**
+- [ ] 方針: 失敗/低信頼の扱い（暫定）
+  - [ ] **厳格JSONとしてパース不能** → `FAILED`
+  - [ ] **低信頼/必須欠落** → Phase2は `FAILED` 扱い（将来 `needsReview` フラグ/状態で運用しやすいよう、情報はDBに保持）
+- [ ] 方針: `categoryMinor` 不一致（許容値外/表記ゆれ）→ **低信頼要因**として扱う
+- [ ] 方針: OS通知タップ時の遷移先 → **対象レシートの詳細画面**
+- [ ] 方針: 通知履歴はPhase2最小では **永続化しない**
+- [ ] 方針: Gemini実装は **REST + OkHttp**
+
 ### 2.1 設定（APIキー）
 - [ ] 設定画面（最小）: APIキー入力/更新/削除
 - [ ] APIキーを安全保管（Keystore/EncryptedSharedPreferences等）
