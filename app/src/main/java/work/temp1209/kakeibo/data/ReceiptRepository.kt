@@ -3,6 +3,7 @@ package work.temp1209.kakeibo.data
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
@@ -25,6 +26,7 @@ class ReceiptRepository(private val context: Context) {
     suspend fun savePendingReceipt(imageUri: Uri): String = withContext(Dispatchers.IO) {
         val now = Instant.now().toString()
         val receiptId = UUID.randomUUID().toString()
+        Log.d(TAG, "savePendingReceipt start receiptId=$receiptId uri=${imageUri.scheme}")
 
         val (w, h) = runCatching {
             context.contentResolver.openInputStream(imageUri)?.use { input ->
@@ -71,12 +73,14 @@ class ReceiptRepository(private val context: Context) {
             )
         )
 
+        Log.d(TAG, "savePendingReceipt done receiptId=$receiptId bytes=$bytes w=$w h=$h")
         receiptId
     }
 
     suspend fun enqueueAnalysis(receiptId: String): Boolean = withContext(Dispatchers.IO) {
         val now = Instant.now().toString()
         val enqueued = dao.enqueueOnce(receiptId = receiptId, queuedAt = now)
+        Log.d(TAG, "enqueueAnalysis receiptId=$receiptId enqueued=$enqueued")
         if (enqueued) {
             scheduleAnalysisWork()
         }
@@ -84,6 +88,7 @@ class ReceiptRepository(private val context: Context) {
     }
 
     fun scheduleAnalysisWork() {
+        Log.d(TAG, "scheduleAnalysisWork enqueueUniqueWork($UNIQUE_WORK_NAME)")
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -136,6 +141,7 @@ class ReceiptRepository(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "ReceiptRepo"
         private const val UNIQUE_WORK_NAME = "analysis-queue"
     }
 }

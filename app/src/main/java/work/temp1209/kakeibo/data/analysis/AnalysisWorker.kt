@@ -1,6 +1,7 @@
 package work.temp1209.kakeibo.data.analysis
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import org.json.JSONObject
@@ -22,9 +23,11 @@ class AnalysisWorker(
         val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull() ?: return Result.success()
         val gemini = GeminiClient()
 
+        Log.d(TAG, "doWork start")
         while (true) {
             val entry = dao.getNextQueuedOrNull() ?: break
             val now = Instant.now().toString()
+            Log.d(TAG, "dequeue queueId=${entry.queueId} receiptId=${entry.receiptId} attemptCount=${entry.attemptCount}")
             dao.markQueueRunning(queueId = entry.queueId, startedAt = now)
 
             val attempt = entry.attemptCount + 1
@@ -33,6 +36,7 @@ class AnalysisWorker(
                 val jpegBytes = applicationContext.contentResolver.openInputStream(android.net.Uri.parse(img.localUri))
                     ?.use { it.readBytes() }
                     ?: error("failed to read image")
+                Log.d(TAG, "loaded image bytes=${jpegBytes.size}")
 
                 val rawResponse = gemini.generateStrictJsonFromImage(
                     apiKey = apiKey,
@@ -45,6 +49,7 @@ class AnalysisWorker(
                 val parsed = JSONObject(strictJson)
                 val receipt = parsed.getJSONObject("receipt")
                 val itemsArr = parsed.getJSONArray("items")
+                Log.d(TAG, "parsed strictJson items=${itemsArr.length()}")
 
                 val merchantName = receipt.getString("merchantName")
                 val receiptDatetime = receipt.getString("receiptDatetime")
@@ -138,8 +143,10 @@ class AnalysisWorker(
                     attemptCount = attempt,
                 )
                 AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
+                Log.d(TAG, "done receiptId=${entry.receiptId} subtotal=$subtotal adjustment=$adjustment")
             } catch (e: Exception) {
                 val msg = e.message ?: e.javaClass.simpleName
+                Log.w(TAG, "failed receiptId=${entry.receiptId} attempt=$attempt error=$msg", e)
                 if (attempt <= 1) {
                     // Put back to QUEUED for a single retry with WorkManager backoff.
                     dao.requeue(entry.queueId, attemptCount = attempt, lastError = msg)
@@ -165,6 +172,7 @@ class AnalysisWorker(
             }
         }
 
+        Log.d(TAG, "doWork end (no more queued)")
         return Result.success()
     }
 
@@ -182,6 +190,7 @@ class AnalysisWorker(
     }
 
     companion object {
+        private const val TAG = "AnalysisWorker"
         private const val PROMPT = """
 レシート画像から情報を抽出し、指定スキーマの厳格JSONのみを返してください。
 カテゴリminorは許容値に完全一致させてください。曖昧な場合はそれでも最も近い値を選び、confidenceを低くしてください。

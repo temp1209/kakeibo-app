@@ -1,5 +1,6 @@
 package work.temp1209.kakeibo.data.gemini
 
+import android.util.Log
 import android.util.Base64
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -18,6 +19,7 @@ class GeminiClient(
         .build(),
 ) {
     fun testText(apiKey: String): String {
+        Log.d(TAG, "testText start (keyPresent=${apiKey.isNotBlank()})")
         val body = JSONObject()
             .put(
                 "contents",
@@ -39,8 +41,11 @@ class GeminiClient(
         httpClient.newCall(request).execute().use { resp ->
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                throw IllegalStateException("HTTP ${resp.code}: $raw")
+                val snippet = raw.take(300)
+                Log.w(TAG, "testText failed http=${resp.code} bodySnippet=${snippet}")
+                throw IllegalStateException("HTTP ${resp.code}: $snippet")
             }
+            Log.d(TAG, "testText ok http=${resp.code} bodySize=${raw.length}")
             return raw
         }
     }
@@ -51,6 +56,7 @@ class GeminiClient(
         prompt: String,
         responseJsonSchema: JSONObject,
     ): String {
+        Log.d(TAG, "generateStrictJsonFromImage start bytes=${jpegBytes.size} promptChars=${prompt.length}")
         val imgB64 = Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
 
         val parts = JSONArray()
@@ -88,13 +94,17 @@ class GeminiClient(
         httpClient.newCall(request).execute().use { resp ->
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                throw IllegalStateException("HTTP ${resp.code}: $raw")
+                val snippet = raw.take(800)
+                Log.w(TAG, "generateContent failed http=${resp.code} bodySnippet=${snippet}")
+                throw IllegalStateException("HTTP ${resp.code}: $snippet")
             }
+            Log.d(TAG, "generateContent ok http=${resp.code} bodySize=${raw.length}")
             return raw
         }
     }
 
     companion object {
+        private const val TAG = "GeminiClient"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
         private const val MODEL = "gemini-2.5-flash"
         private const val JSON = "application/json; charset=utf-8"
