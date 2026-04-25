@@ -39,6 +39,7 @@ import work.temp1209.kakeibo.ui.theme.KakeiboappTheme
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.ui.list.ReceiptsListScreen
+import work.temp1209.kakeibo.ui.settings.SettingsScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -158,7 +159,7 @@ private fun AppNav(innerPadding: PaddingValues) {
                 androidx.compose.material3.Text(modifier = Modifier.padding(16.dp), text = "通知 (TODO)")
             }
             composable(Route.Settings.value) {
-                androidx.compose.material3.Text(modifier = Modifier.padding(16.dp), text = "設定 (TODO)")
+                SettingsScreen(contentPadding = PaddingValues(0.dp))
             }
 
             composable(
