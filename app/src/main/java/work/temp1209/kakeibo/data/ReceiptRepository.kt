@@ -4,8 +4,10 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.Constraints
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.analysis.AnalysisWorker
@@ -82,7 +84,11 @@ class ReceiptRepository(private val context: Context) {
     }
 
     fun scheduleAnalysisWork() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
         val request = OneTimeWorkRequestBuilder<AnalysisWorker>()
+            .setConstraints(constraints)
             .build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(

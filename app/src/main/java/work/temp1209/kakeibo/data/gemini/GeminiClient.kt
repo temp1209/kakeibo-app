@@ -11,7 +11,10 @@ import java.time.Duration
 
 class GeminiClient(
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .callTimeout(Duration.ofSeconds(60))
+        .connectTimeout(Duration.ofSeconds(15))
+        .writeTimeout(Duration.ofSeconds(60))
+        .readTimeout(Duration.ofSeconds(120))
+        .callTimeout(Duration.ofSeconds(180))
         .build(),
 ) {
     fun testText(apiKey: String): String {
