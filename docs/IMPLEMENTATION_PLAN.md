@@ -50,12 +50,12 @@
 - [x] CAMERA権限の要求
 - [x] プレビュー表示
 - [x] シャッターでJPEG保存（アプリ内部ストレージ）
-- [ ] 画像の保存命名規則を固定（例: `receipts/<uuid>.jpg`）※現状でOKならスキップ
+- [x] 画像の保存命名規則を固定（例: `receipts/<uuid>.jpg`）
 - [x] 保存時に **長辺1600pxへリサイズ + JPEG品質85** を適用（要件準拠）
 - [x] EXIF回転を反映して保存（プレビューで横向きになる問題の対策）
-- [ ] 画像メタ取得（width/height/byteSize）を保存後の実ファイルで確定させる
+- [x] 画像メタ取得（width/height/byteSize）を保存後の実ファイルで確定させる
 - [x] 40日削除に備えて「capturedAt基準のretentionUntil」を保存（Phase1で持つ）
-- [ ] 撮影失敗時のリトライ/エラー表示（最小でOK）
+- [x] 撮影失敗時のリトライ/エラー表示（Snackbar + Retry）
 
 ### 1.2 送信前プレビュー（フールセーフ）
 - [x] 撮影後にプレビュー表示
@@ -70,19 +70,19 @@
 - [x] 一覧の並び基準に備える（要件準拠）:
   - [x] `receiptDatetime` を保存できるようにする（暫定で `capturedAt` をコピー）
   - [x] 一覧ソートは `COALESCE(receiptDatetime, capturedAt)` の降順に寄せる
-- [ ] 画像サイズ/容量の取得精度を改善（任意）
-- [ ] 保存対象の追加方針（将来拡張）を固める: `receiptDatetime/merchantName/totalAmountYen` は後で埋める前提
+- [x] 画像サイズ/容量（width/height/byteSize）を保存できる
+- [ ] Receiptの上位情報（merchantName/totalAmountYen/receiptDatetimeの確定値）を保存する（Phase3で実装）
 
 ### 1.4 一覧画面（最小）
 - [x] `capturedAt` 降順で一覧表示
-- [ ] リストから「画像プレビュー再表示」（詳細画面の最小）を追加（任意）
+- [x] リストから「画像プレビュー再表示」（詳細画面の最小）を追加
 - [x] レシート詳細画面（最小）: 画像のみ表示（解析結果は未実装でもOK）
 
 ### 1.4.1 画像の保持/削除（要件準拠の最小）
 - [x] アプリ起動時に40日超過画像を掃除（冪等）
   - [x] `receipt_images.retentionUntil` 超過を検索 → 物理ファイル削除
-  - [x] `receipt_images.deletedAt`（または同等フラグ）を更新して二重削除に耐える
-  - [ ] 将来: 起動時ではなく WorkManager に寄せて「バックグラウンドで掃除」へ移行（起動速度保護）
+  - [x] `receipt_images.deletedAt` を更新して二重削除に耐える（行は残す方針）
+  - [ ] 将来: WorkManagerに寄せてバックグラウンド掃除（起動速度保護）
 
 ### 1.5 MVPの確認項目（実機）
 - [x] 起動→即カメラ
@@ -119,6 +119,11 @@
 - [ ] Worker実装（1件ずつ取り出し → Gemini → DB更新）
 - [ ] 失敗時: backoff / 最大試行回数 / FAILED遷移
 - [ ] キューの可観測性: 設定/通知タブに「キュー件数」「最終エラー」を出す（最小）
+
+### 2.x 端末内ファイルのメンテ（WorkManagerへ段階移行）
+- [ ] 画像の40日掃除を WorkManager に移行（起動速度保護）
+  - [ ] 端末アイドル/充電中などの条件は要検討（初期は毎日1回程度でもOK）
+  - [ ] `receipt_images.deletedAt IS NULL` のみ対象にして冪等にする
 
 ### 2.5 通知（要件準拠の最小）
 - [ ] OS通知: 解析完了（DONE）

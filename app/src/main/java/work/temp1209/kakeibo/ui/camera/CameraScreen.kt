@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,6 +50,8 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var bindAttempt by remember { mutableStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val previewView = remember { PreviewView(context) }
     val imageCapture = remember {
@@ -56,7 +60,7 @@ fun CameraScreen(
             .build()
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(bindAttempt) {
         val cameraProvider = ProcessCameraProvider.getInstance(context).get()
         val preview = Preview.Builder().build().also {
             it.surfaceProvider = previewView.surfaceProvider
@@ -72,6 +76,19 @@ fun CameraScreen(
             )
         } catch (e: Exception) {
             errorMessage = e.message ?: e.javaClass.simpleName
+        }
+    }
+
+    LaunchedEffect(errorMessage) {
+        val msg = errorMessage ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = msg,
+            actionLabel = "Retry",
+            withDismissAction = true,
+        )
+        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+            errorMessage = null
+            bindAttempt++
         }
     }
 
@@ -92,6 +109,8 @@ fun CameraScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        SnackbarHost(hostState = snackbarHostState)
+
         AndroidView(
             factory = { previewView },
             modifier = Modifier
@@ -99,19 +118,13 @@ fun CameraScreen(
                 .fillMaxSize(),
         )
 
-        if (errorMessage != null) {
-            Text(
-                text = "Camera error: $errorMessage",
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
         Button(onClick = { onOpenList() }) {
             Text("一覧を開く")
         }
 
         Button(
             onClick = {
+                errorMessage = null
                 captureToInternalFile(
                     context = context,
                     imageCapture = imageCapture,
