@@ -153,6 +153,9 @@ private fun captureToInternalFile(
                 }.onSuccess {
                     onSuccess(Uri.fromFile(finalFile))
                 }.onFailure {
+                    // 失敗時も掃除（容量リーク防止）
+                    runCatching { rawFile.delete() }
+                    runCatching { finalFile.delete() }
                     onError(it.message ?: it.javaClass.simpleName)
                 }
             }
