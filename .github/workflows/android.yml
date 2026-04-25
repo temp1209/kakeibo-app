@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -21,6 +23,13 @@ jobs:
 
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v3
+
+      - name: Skip (no gradlew yet)
+        run: |
+          if [ ! -f "./gradlew" ]; then
+            echo "No ./gradlew found. Android project not initialized yet; skipping CI."
+            exit 0
+          fi
 
       - name: Gradle test
         run: ./gradlew test
