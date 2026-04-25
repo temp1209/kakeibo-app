@@ -19,6 +19,9 @@ out/
 # Kotlin/Java
 *.class
 
+# Kotlin/IDE cache
+.kotlin/
+
 # OS
 .DS_Store
 Thumbs.db
