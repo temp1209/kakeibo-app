@@ -15,28 +15,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check gradlew exists
+        id: gradlew
+        shell: bash
+        run: |
+          if [ -f "./gradlew" ]; then
+            echo "has_gradlew=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_gradlew=false" >> "$GITHUB_OUTPUT"
+            echo "No ./gradlew found. Android project not initialized yet; skipping Gradle steps."
+          fi
+
       - name: Set up JDK
+        if: steps.gradlew.outputs.has_gradlew == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
       - name: Gradle cache
+        if: steps.gradlew.outputs.has_gradlew == 'true'
         uses: gradle/actions/setup-gradle@v3
-
-      - name: Skip (no gradlew yet)
-        run: |
-          if [ ! -f "./gradlew" ]; then
-            echo "No ./gradlew found. Android project not initialized yet; skipping CI."
-            exit 0
-          fi
+        with:
+          cache-disabled: true
 
       - name: Gradle test
+        if: steps.gradlew.outputs.has_gradlew == 'true'
         run: ./gradlew test
 
       - name: Gradle lint
+        if: steps.gradlew.outputs.has_gradlew == 'true'
         run: ./gradlew lint
 
       - name: Assemble debug
+        if: steps.gradlew.outputs.has_gradlew == 'true'
         run: ./gradlew assembleDebug
 
