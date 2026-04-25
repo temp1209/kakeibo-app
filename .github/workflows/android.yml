@@ -39,6 +39,11 @@ jobs:
         with:
           cache-disabled: true
 
+      - name: Ensure gradlew is executable
+        if: steps.gradlew.outputs.has_gradlew == 'true'
+        shell: bash
+        run: chmod +x ./gradlew
+
       - name: Gradle test
         if: steps.gradlew.outputs.has_gradlew == 'true'
         run: ./gradlew test
