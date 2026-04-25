@@ -20,6 +20,9 @@ interface ReceiptDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGeminiResult(result: GeminiResultEntity)
 
+    @Query("SELECT * FROM gemini_results WHERE receiptId = :receiptId ORDER BY createdAt DESC LIMIT 1")
+    suspend fun getLatestGeminiResultOrNull(receiptId: String): GeminiResultEntity?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertQueue(entry: AnalysisQueueEntity)
 

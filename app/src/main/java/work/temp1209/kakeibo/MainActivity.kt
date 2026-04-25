@@ -197,6 +197,7 @@ private fun AppNav(
                     contentPadding = PaddingValues(0.dp),
                     receiptId = receiptId,
                     loadImage = { id -> repo.getReceiptImage(id) },
+                    loadGeminiJson = { id -> repo.getLatestGeminiJsonOrNull(id) },
                     onBack = { navController.popBackStack() },
                 )
             }

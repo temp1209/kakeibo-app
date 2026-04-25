@@ -111,6 +111,10 @@ class ReceiptRepository(private val context: Context) {
         dao.getReceiptImage(receiptId)
     }
 
+    suspend fun getLatestGeminiJsonOrNull(receiptId: String): String? = withContext(Dispatchers.IO) {
+        dao.getLatestGeminiResultOrNull(receiptId)?.rawJson
+    }
+
     suspend fun cleanupExpiredImages(now: Instant = Instant.now()): Int = withContext(Dispatchers.IO) {
         val expired = dao.listExpiredImages(now.toString())
         var deleted = 0
