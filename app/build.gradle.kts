@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.okhttp)
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

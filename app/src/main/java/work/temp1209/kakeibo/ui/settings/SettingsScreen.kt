@@ -22,7 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import androidx.compose.runtime.rememberCoroutineScope
 
 @Composable
 fun SettingsScreen(
@@ -30,11 +35,14 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val store = remember { GeminiApiKeyStore(context) }
+    val scope = rememberCoroutineScope()
+    val gemini = remember { GeminiClient() }
 
     val snackbarHostState = remember { SnackbarHostState() }
     var apiKeyInput by remember { mutableStateOf("") }
     var showOverwriteConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var testing by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -88,11 +96,25 @@ fun SettingsScreen(
 
         Button(
             onClick = {
-                // Phase2: まずはUI/保管のみ。疎通はGeminiクライアント実装後に接続する。
+                if (testing) return@Button
+                val apiKey = store.readKeyOrNull() ?: return@Button
+                testing = true
+                scope.launch {
+                    val msg = runCatching {
+                        withContext(Dispatchers.IO) {
+                            gemini.testText(apiKey)
+                        }
+                    }.fold(
+                        onSuccess = { "疎通OK" },
+                        onFailure = { "疎通NG: ${it.message ?: it.javaClass.simpleName}" },
+                    )
+                    snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
+                    testing = false
+                }
             },
-            enabled = store.hasKey(),
+            enabled = store.hasKey() && !testing,
         ) {
-            Text("疎通テスト（テキスト）")
+            Text(if (testing) "疎通テスト中..." else "疎通テスト（テキスト）")
         }
     }
 
