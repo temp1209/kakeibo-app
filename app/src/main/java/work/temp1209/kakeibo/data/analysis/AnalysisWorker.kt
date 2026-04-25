@@ -192,8 +192,55 @@ class AnalysisWorker(
     companion object {
         private const val TAG = "AnalysisWorker"
         private const val PROMPT = """
-レシート画像から情報を抽出し、指定スキーマの厳格JSONのみを返してください。
-カテゴリminorは許容値に完全一致させてください。曖昧な場合はそれでも最も近い値を選び、confidenceを低くしてください。
+あなたは家計簿アプリのOCR/分類エンジンです。レシート画像から情報を抽出し、必ず「指定スキーマの厳格JSONのみ」を返してください。
+
+## 出力ルール（最重要）
+- 出力は JSON のみ（前後に説明文/コードフェンス/注釈を付けない）
+- スキーマに無いキーを追加しない（additionalProperties禁止）
+- enum外の値を絶対に出さない（例: categoryMajor に "Discount" などを作らない）
+- 明細行(items)は「支出の明細行（商品）」のみ。値引き/割引/ポイント/クーポン等の行は items に出さない（warnings に記載して良い）
+
+## category（固定リスト、表記ゆれ禁止）
+- categoryMajor は次のいずれか: FOOD / DAILY_GOODS / TRANSPORT / HOUSING / UTILITIES / COMMUNICATION / MEDICAL / EDUCATION / SOCIAL / ENTERTAINMENT / CLOTHING / OTHER
+- categoryMinor は次の日本語ラベルのいずれかに完全一致:
+  スーパー, 外食, その他,
+  衛生用品, 雑貨（小物）, 家具家電,
+  電車/バス, 定期券,
+  家賃/住宅ローン, 家具（大物）,
+  電気, ガス, 水道,
+  携帯, インターネット, サブスク（通信系）,
+  病院, 薬, 健康/検診,
+  教材,
+  交際費, 飲み会, 贈り物, 冠婚葬祭,
+  趣味, 旅行, イベント, ゲーム（買い切り）, ゲーム（課金）,
+  衣類, 靴/バッグ, クリーニング,
+  返済
+
+## confidence（0.0〜1.0）の定義（明細行ごと）
+「その明細行(itemName/quantity/lineTotalYen/categoryMajor/categoryMinor/necessityScore)が正しい確率」の自己評価。
+- 0.90〜1.00: 文字も金額も明瞭で、分類もほぼ確実
+- 0.70〜0.89: 多少不鮮明だが推測可能（分類も妥当）
+- 0.40〜0.69: 商品名/金額/分類のいずれかが曖昧。推測に依存
+- 0.00〜0.39: ほぼ読めない/推測が強い（itemName="不明" を使ってよい）
+曖昧な場合は「高くしない」。迷ったら低めに。
+
+## necessityScore（0〜100）の定義（明細行ごと）
+目的: 無駄遣い（裁量支出）可視化のためのスコア。
+- 100に近いほど「生活必須（必需品）」、0に近いほど「娯楽/裁量」
+例:
+- 90〜100: 食材/日常消耗品/医薬品など
+- 60〜89: 生活に必要だが代替の幅があるもの（外食、日用品の一部など）
+- 30〜59: 嗜好品/趣味寄り
+- 0〜29: 明確に娯楽・贅沢（ゲーム課金、趣味性が強いもの等）
+商品が不明で判断できない場合は 50 に寄せ、confidence を下げる。
+
+## 金額/数量
+- quantity が取れない場合は 1
+- lineTotalYen は「その明細行の行合計（円）」を整数で
+- totalAmountYen は「レシート合計（円）」を整数で
+
+## warnings
+読み取りが怪しい/割引行がある/不明点がある場合は warnings に日本語で簡潔に記載。
 """
     }
 }
