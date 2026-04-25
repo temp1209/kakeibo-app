@@ -3,8 +3,12 @@ package work.temp1209.kakeibo.data
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import work.temp1209.kakeibo.data.analysis.AnalysisWorker
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
@@ -68,6 +72,26 @@ class ReceiptRepository(private val context: Context) {
         receiptId
     }
 
+    suspend fun enqueueAnalysis(receiptId: String): Boolean = withContext(Dispatchers.IO) {
+        val now = Instant.now().toString()
+        val enqueued = dao.enqueueOnce(receiptId = receiptId, queuedAt = now)
+        if (enqueued) {
+            scheduleAnalysisWork()
+        }
+        enqueued
+    }
+
+    fun scheduleAnalysisWork() {
+        val request = OneTimeWorkRequestBuilder<AnalysisWorker>()
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                request,
+            )
+    }
+
     suspend fun listReceipts() = withContext(Dispatchers.IO) {
         dao.listReceipts()
     }
@@ -95,6 +119,18 @@ class ReceiptRepository(private val context: Context) {
         if (scheme != "file") return null
         val p = path ?: return null
         return File(p)
+    }
+
+    suspend fun queueInFlightCount(): Int = withContext(Dispatchers.IO) {
+        dao.countQueueInFlight()
+    }
+
+    suspend fun latestQueueErrorOrNull(): String? = withContext(Dispatchers.IO) {
+        dao.getLatestQueueErrorOrNull()
+    }
+
+    companion object {
+        private const val UNIQUE_WORK_NAME = "analysis-queue"
     }
 }
 

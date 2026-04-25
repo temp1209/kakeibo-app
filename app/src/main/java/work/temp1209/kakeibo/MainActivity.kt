@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.ui.list.ReceiptsListScreen
 import work.temp1209.kakeibo.ui.settings.SettingsScreen
+import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -136,7 +137,8 @@ private fun AppNav(innerPadding: PaddingValues) {
 
                 if (saving) {
                     LaunchedEffect(imageUri) {
-                        repo.savePendingReceipt(imageUri)
+                        val receiptId = repo.savePendingReceipt(imageUri)
+                        repo.enqueueAnalysis(receiptId)
                         navController.navigate(Route.Camera.value) {
                             popUpTo(Route.Camera.value) { inclusive = true }
                         }
@@ -156,7 +158,7 @@ private fun AppNav(innerPadding: PaddingValues) {
                 androidx.compose.material3.Text(modifier = Modifier.padding(16.dp), text = "分析 (TODO)")
             }
             composable(Route.Notifications.value) {
-                androidx.compose.material3.Text(modifier = Modifier.padding(16.dp), text = "通知 (TODO)")
+                NotificationsScreen(contentPadding = PaddingValues(0.dp), repo = repo)
             }
             composable(Route.Settings.value) {
                 SettingsScreen(contentPadding = PaddingValues(0.dp))
