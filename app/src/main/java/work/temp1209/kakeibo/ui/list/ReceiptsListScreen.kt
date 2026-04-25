@@ -26,7 +26,7 @@ import work.temp1209.kakeibo.data.db.ReceiptEntity
 fun ReceiptsListScreen(
     contentPadding: PaddingValues,
     loadReceipts: suspend () -> List<ReceiptEntity>,
-    onBackToCamera: () -> Unit,
+    onOpenReceipt: (String) -> Unit,
 ) {
     var receipts by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
 
@@ -41,8 +41,6 @@ fun ReceiptsListScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Button(onClick = onBackToCamera) { Text("カメラへ戻る") }
-
         if (receipts.isEmpty()) {
             Text("まだ保存されたレシートはありません。")
             return@Column
@@ -52,8 +50,10 @@ fun ReceiptsListScreen(
             items(receipts, key = { it.receiptId }) { r ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    onClick = { onOpenReceipt(r.receiptId) },
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
+                        Text("receiptDatetime: ${r.receiptDatetime ?: "-"}")
                         Text("capturedAt: ${r.capturedAt}")
                         Text("status: ${r.analysisStatus}")
                         Text("id: ${r.receiptId.take(8)}…")

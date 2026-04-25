@@ -8,7 +8,9 @@ import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
+import java.io.File
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class ReceiptRepository(private val context: Context) {
@@ -18,19 +20,6 @@ class ReceiptRepository(private val context: Context) {
         val now = Instant.now().toString()
         val receiptId = UUID.randomUUID().toString()
 
-        val bytes = runCatching {
-            context.contentResolver.openInputStream(imageUri)?.use { input ->
-                val buf = ByteArray(DEFAULT_BUFFER_SIZE)
-                var total = 0L
-                while (true) {
-                    val read = input.read(buf)
-                    if (read <= 0) break
-                    total += read
-                }
-                total
-            }
-        }.getOrNull() ?: 0L
-
         val (w, h) = runCatching {
             context.contentResolver.openInputStream(imageUri)?.use { input ->
                 val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -39,10 +28,13 @@ class ReceiptRepository(private val context: Context) {
             }
         }.getOrNull()?.let { (ww, hh) -> ww to hh } ?: (null to null)
 
+        val bytes = runCatching { imageUri.toFileOrNull()?.length() ?: 0L }.getOrNull() ?: 0L
+
         dao.upsertReceipt(
             ReceiptEntity(
                 receiptId = receiptId,
                 capturedAt = now,
+                receiptDatetime = now, // 暫定: Phase1では capturedAt をコピー（後でGemini/手入力で上書き）
                 analysisStatus = "PENDING",
                 createdAt = now,
                 updatedAt = now,
@@ -55,6 +47,8 @@ class ReceiptRepository(private val context: Context) {
                 byteSize = bytes,
                 width = w,
                 height = h,
+                retentionUntil = Instant.parse(now).plus(40, ChronoUnit.DAYS).toString(),
+                deletedAt = null,
             )
         )
 
@@ -63,6 +57,31 @@ class ReceiptRepository(private val context: Context) {
 
     suspend fun listReceipts() = withContext(Dispatchers.IO) {
         dao.listReceipts()
+    }
+
+    suspend fun getReceiptImage(receiptId: String) = withContext(Dispatchers.IO) {
+        dao.getReceiptImage(receiptId)
+    }
+
+    suspend fun cleanupExpiredImages(now: Instant = Instant.now()): Int = withContext(Dispatchers.IO) {
+        val expired = dao.listExpiredImages(now.toString())
+        var deleted = 0
+        for (img in expired) {
+            val uri = runCatching { Uri.parse(img.localUri) }.getOrNull() ?: continue
+            val file = uri.toFileOrNull() ?: continue
+            if (file.exists()) {
+                runCatching { file.delete() }
+            }
+            dao.markImageDeleted(img.receiptId, now.toString())
+            deleted++
+        }
+        deleted
+    }
+
+    private fun Uri.toFileOrNull(): File? {
+        if (scheme != "file") return null
+        val p = path ?: return null
+        return File(p)
     }
 }
 

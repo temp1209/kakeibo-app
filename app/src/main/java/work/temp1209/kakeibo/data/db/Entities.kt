@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class ReceiptEntity(
     @PrimaryKey val receiptId: String,
     val capturedAt: String,
+    val receiptDatetime: String?,
     val analysisStatus: String,
     val createdAt: String,
     val updatedAt: String,
@@ -19,5 +20,7 @@ data class ReceiptImageEntity(
     val byteSize: Long,
     val width: Int?,
     val height: Int?,
+    val retentionUntil: String,
+    val deletedAt: String?,
 )
 

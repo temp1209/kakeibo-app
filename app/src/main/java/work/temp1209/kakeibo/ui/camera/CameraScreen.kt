@@ -1,6 +1,8 @@
 package work.temp1209.kakeibo.ui.camera
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -31,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 
 @Composable
@@ -127,16 +130,28 @@ private fun captureToInternalFile(
     onError: (String) -> Unit,
 ) {
     val dir = File(context.filesDir, "receipts").apply { mkdirs() }
-    val file = File(dir, "${UUID.randomUUID()}.jpg")
+    val rawFile = File(dir, "${UUID.randomUUID()}_raw.jpg")
+    val finalFile = File(dir, "${UUID.randomUUID()}.jpg")
 
-    val outputOptions = ImageCapture.OutputFileOptions.Builder(file).build()
+    val outputOptions = ImageCapture.OutputFileOptions.Builder(rawFile).build()
     imageCapture.takePicture(
         outputOptions,
         ContextCompat.getMainExecutor(context),
         object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                val savedUri = outputFileResults.savedUri ?: Uri.fromFile(file)
-                onSuccess(savedUri)
+                // 要件: JPEG品質85 + 長辺1600pxへリサイズして保存
+                runCatching {
+                    val resized = resizeJpegLongSide(
+                        inputFile = rawFile,
+                        maxLongSidePx = 1600,
+                    )
+                    saveJpeg(resized, finalFile, quality = 85)
+                    rawFile.delete()
+                }.onSuccess {
+                    onSuccess(Uri.fromFile(finalFile))
+                }.onFailure {
+                    onError(it.message ?: it.javaClass.simpleName)
+                }
             }
 
             override fun onError(exception: ImageCaptureException) {
@@ -144,5 +159,32 @@ private fun captureToInternalFile(
             }
         }
     )
+}
+
+private fun resizeJpegLongSide(inputFile: File, maxLongSidePx: Int): Bitmap {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(inputFile.absolutePath, bounds)
+    val srcW = bounds.outWidth.coerceAtLeast(1)
+    val srcH = bounds.outHeight.coerceAtLeast(1)
+    val longSide = maxOf(srcW, srcH)
+    val scale = if (longSide > maxLongSidePx) maxLongSidePx.toFloat() / longSide.toFloat() else 1f
+    val dstW = (srcW * scale).toInt().coerceAtLeast(1)
+    val dstH = (srcH * scale).toInt().coerceAtLeast(1)
+
+    val decodeOpts = BitmapFactory.Options().apply {
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    val src = BitmapFactory.decodeFile(inputFile.absolutePath, decodeOpts)
+        ?: throw IllegalStateException("Failed to decode JPEG")
+    return if (scale == 1f) src else Bitmap.createScaledBitmap(src, dstW, dstH, true).also { src.recycle() }
+}
+
+private fun saveJpeg(bitmap: Bitmap, outFile: File, quality: Int) {
+    FileOutputStream(outFile).use { out ->
+        if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) {
+            throw IllegalStateException("Failed to compress JPEG")
+        }
+    }
+    bitmap.recycle()
 }
 
