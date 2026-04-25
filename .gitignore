@@ -1,0 +1,37 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log files
+*.log
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Kotlin/Java
+*.class
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keystores (never commit)
+*.keystore
+*.jks
+*.p12
+
+# Firebase (if added later)
+google-services.json
+
+# Secrets
+*.env
+
