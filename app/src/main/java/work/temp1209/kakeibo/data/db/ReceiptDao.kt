@@ -26,6 +26,9 @@ interface ReceiptDao {
     @Query("SELECT * FROM receipts ORDER BY COALESCE(receiptDatetime, capturedAt) DESC")
     suspend fun listReceipts(): List<ReceiptEntity>
 
+    @Query("SELECT * FROM receipts WHERE receiptId = :receiptId LIMIT 1")
+    suspend fun getReceiptOrNull(receiptId: String): ReceiptEntity?
+
     @Query("SELECT * FROM receipt_images WHERE receiptId = :receiptId LIMIT 1")
     suspend fun getReceiptImage(receiptId: String): ReceiptImageEntity?
 
@@ -38,8 +41,8 @@ interface ReceiptDao {
     @Query("UPDATE analysis_queue SET status = :status, finishedAt = :finishedAt, lastError = :lastError, attemptCount = :attemptCount WHERE queueId = :queueId")
     suspend fun finishQueue(queueId: String, status: String, finishedAt: String, lastError: String?, attemptCount: Int)
 
-    @Query("UPDATE analysis_queue SET attemptCount = :attemptCount, lastError = :lastError WHERE queueId = :queueId")
-    suspend fun updateQueueAttempt(queueId: String, attemptCount: Int, lastError: String?)
+    @Query("UPDATE analysis_queue SET status = 'QUEUED', attemptCount = :attemptCount, lastError = :lastError, startedAt = NULL, finishedAt = NULL WHERE queueId = :queueId")
+    suspend fun requeue(queueId: String, attemptCount: Int, lastError: String?)
 
     @Query("SELECT COUNT(*) FROM analysis_queue WHERE status IN ('QUEUED','RUNNING')")
     suspend fun countQueueInFlight(): Int
