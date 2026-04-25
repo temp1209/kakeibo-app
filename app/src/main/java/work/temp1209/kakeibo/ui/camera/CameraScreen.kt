@@ -3,6 +3,7 @@ package work.temp1209.kakeibo.ui.camera
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -32,6 +33,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -130,8 +132,9 @@ private fun captureToInternalFile(
     onError: (String) -> Unit,
 ) {
     val dir = File(context.filesDir, "receipts").apply { mkdirs() }
-    val rawFile = File(dir, "${UUID.randomUUID()}_raw.jpg")
-    val finalFile = File(dir, "${UUID.randomUUID()}.jpg")
+    val id = UUID.randomUUID().toString()
+    val rawFile = File(dir, "${id}_raw.jpg")
+    val finalFile = File(dir, "${id}.jpg")
 
     val outputOptions = ImageCapture.OutputFileOptions.Builder(rawFile).build()
     imageCapture.takePicture(
@@ -162,21 +165,40 @@ private fun captureToInternalFile(
 }
 
 private fun resizeJpegLongSide(inputFile: File, maxLongSidePx: Int): Bitmap {
+    val rotationDegrees = runCatching { readExifRotationDegrees(inputFile) }.getOrElse { 0 }
+
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(inputFile.absolutePath, bounds)
     val srcW = bounds.outWidth.coerceAtLeast(1)
     val srcH = bounds.outHeight.coerceAtLeast(1)
-    val longSide = maxOf(srcW, srcH)
+    val (effectiveW, effectiveH) =
+        if (rotationDegrees == 90 || rotationDegrees == 270) srcH to srcW else srcW to srcH
+    val longSide = maxOf(effectiveW, effectiveH)
     val scale = if (longSide > maxLongSidePx) maxLongSidePx.toFloat() / longSide.toFloat() else 1f
-    val dstW = (srcW * scale).toInt().coerceAtLeast(1)
-    val dstH = (srcH * scale).toInt().coerceAtLeast(1)
+    val dstW = (effectiveW * scale).toInt().coerceAtLeast(1)
+    val dstH = (effectiveH * scale).toInt().coerceAtLeast(1)
 
     val decodeOpts = BitmapFactory.Options().apply {
         inPreferredConfig = Bitmap.Config.ARGB_8888
     }
-    val src = BitmapFactory.decodeFile(inputFile.absolutePath, decodeOpts)
+    val decoded = BitmapFactory.decodeFile(inputFile.absolutePath, decodeOpts)
         ?: throw IllegalStateException("Failed to decode JPEG")
-    return if (scale == 1f) src else Bitmap.createScaledBitmap(src, dstW, dstH, true).also { src.recycle() }
+
+    val rotated = if (rotationDegrees == 0) {
+        decoded
+    } else {
+        Bitmap.createBitmap(
+            decoded,
+            0,
+            0,
+            decoded.width,
+            decoded.height,
+            Matrix().apply { postRotate(rotationDegrees.toFloat()) },
+            true,
+        ).also { decoded.recycle() }
+    }
+
+    return if (scale == 1f) rotated else Bitmap.createScaledBitmap(rotated, dstW, dstH, true).also { rotated.recycle() }
 }
 
 private fun saveJpeg(bitmap: Bitmap, outFile: File, quality: Int) {
@@ -186,5 +208,15 @@ private fun saveJpeg(bitmap: Bitmap, outFile: File, quality: Int) {
         }
     }
     bitmap.recycle()
+}
+
+private fun readExifRotationDegrees(file: File): Int {
+    val exif = ExifInterface(file)
+    return when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED)) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270
+        else -> 0
+    }
 }
 
