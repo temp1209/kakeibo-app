@@ -5,8 +5,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import work.temp1209.kakeibo.MainActivity
 import work.temp1209.kakeibo.R
 
@@ -41,6 +44,13 @@ object AnalysisNotifications {
     private fun notify(context: Context, receiptId: String, title: String, text: String, notificationId: Int) {
         ensureChannel(context)
 
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= 33) {
+            val granted = ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            if (!granted) return
+        }
+
         val intent = Intent(context, MainActivity::class.java)
             .putExtra(EXTRA_RECEIPT_ID, receiptId)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -60,7 +70,9 @@ object AnalysisNotifications {
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, n)
+        runCatching {
+            NotificationManagerCompat.from(context).notify(notificationId, n)
+        }
     }
 }
 
