@@ -29,7 +29,7 @@ interface ReceiptDao {
     @Query("SELECT * FROM receipts ORDER BY COALESCE(receiptDatetime, capturedAt) DESC")
     suspend fun listReceipts(): List<ReceiptEntity>
 
-    @Query("SELECT * FROM receipts WHERE analysisStatus IN ('DONE','FAILED') ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit")
+    @Query("SELECT * FROM receipts WHERE analysisStatus IN ('DONE','FAILED','NEEDS_REVIEW') ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit")
     suspend fun listRecentAnalyzed(limit: Int): List<ReceiptEntity>
 
     @Query("SELECT * FROM receipts WHERE needsReview = 1 ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit")

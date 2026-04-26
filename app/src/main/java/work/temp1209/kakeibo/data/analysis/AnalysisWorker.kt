@@ -59,7 +59,20 @@ class AnalysisWorker(
 
                 val items = mutableListOf<ReceiptItemEntity>()
                 var subtotal = 0L
-                for (it: ReceiptItem in parsed.items) {
+                val seenLineIndex = hashSetOf<Int>()
+                val normalizedItems = parsed.items
+                    .sortedBy { it.lineIndex }
+                    .filter { it.lineIndex >= 0 }
+                    .filter { seenLineIndex.add(it.lineIndex) }
+
+                val dropped = parsed.items.size - normalizedItems.size
+                val flags2 = if (dropped > 0) {
+                    flags.copy(needsReview = true, reasons = (flags.reasons + "duplicate/invalid lineIndex dropped: $dropped").distinct())
+                } else {
+                    flags
+                }
+
+                for (it: ReceiptItem in normalizedItems) {
                     subtotal += it.lineTotalYen
                     items += ReceiptItemEntity(
                         itemId = "${entry.receiptId}:${it.lineIndex}",
@@ -78,10 +91,11 @@ class AnalysisWorker(
 
                 val adjustment = totalAmountYen - subtotal
                 if (adjustment != 0L) {
+                    val maxLineIndex = normalizedItems.maxOfOrNull { it.lineIndex } ?: -1
                     items += ReceiptItemEntity(
                         itemId = "${entry.receiptId}:adjustment",
                         receiptId = entry.receiptId,
-                        lineIndex = items.size,
+                        lineIndex = maxLineIndex + 1,
                         itemName = "調整",
                         quantity = 1,
                         lineTotalYen = adjustment,
@@ -95,8 +109,8 @@ class AnalysisWorker(
 
                 val existing = dao.getReceiptOrNull(entry.receiptId) ?: error("receipt missing")
                 val updatedAt = Instant.now().toString()
-                val receiptStatus = if (flags.needsReview) "FAILED" else "DONE"
-                val errorMessage = if (flags.needsReview) flags.reasons.joinToString("; ") else null
+                val receiptStatus = if (flags2.needsReview) "NEEDS_REVIEW" else "DONE"
+                val errorMessage = if (flags2.needsReview) flags2.reasons.joinToString("; ") else null
                 dao.upsertReceipt(
                     existing.copy(
                         receiptDatetime = receiptDatetime,
@@ -108,7 +122,7 @@ class AnalysisWorker(
                         analysisStartedAt = now,
                         analysisCompletedAt = updatedAt,
                         analysisErrorMessage = errorMessage,
-                        needsReview = if (flags.needsReview) 1 else 0,
+                        needsReview = if (flags2.needsReview) 1 else 0,
                         itemsSubtotalYen = subtotal,
                         adjustmentYen = adjustment,
                         updatedAt = updatedAt,
@@ -134,7 +148,7 @@ class AnalysisWorker(
                     lastError = null,
                     attemptCount = attempt,
                 )
-                if (flags.needsReview) {
+                if (flags2.needsReview) {
                     AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
                 } else {
                     AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)

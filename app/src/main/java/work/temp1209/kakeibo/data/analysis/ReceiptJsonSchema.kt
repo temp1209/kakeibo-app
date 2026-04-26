@@ -54,6 +54,8 @@ object ReceiptJsonSchema {
             .put("衣類").put("靴/バッグ").put("クリーニング")
             // OTHER
             .put("返済")
+            // Common "その他" for each major (same label)
+            .put("その他")
 
         val receipt = JSONObject()
             .put("type", "object")

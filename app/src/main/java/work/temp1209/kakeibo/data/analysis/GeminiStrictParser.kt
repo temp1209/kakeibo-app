@@ -60,6 +60,14 @@ object GeminiStrictParser {
         val lowConfCount = response.items.count { it.confidence < confidenceThreshold }
         if (lowConfCount > 0) reasons += "low confidence items: $lowConfCount"
 
+        val duplicateLineIndex = response.items
+            .groupBy { it.lineIndex }
+            .any { (idx, group) -> idx >= 0 && group.size >= 2 }
+        if (duplicateLineIndex) reasons += "duplicate lineIndex"
+
+        val invalidLineIndexCount = response.items.count { it.lineIndex < 0 }
+        if (invalidLineIndexCount > 0) reasons += "invalid lineIndex: $invalidLineIndexCount"
+
         val needsReview = reasons.isNotEmpty()
         return ReviewFlags(needsReview = needsReview, reasons = reasons)
     }
