@@ -1,10 +1,19 @@
 package work.temp1209.kakeibo.ui.notifications
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,18 +24,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.ReceiptRepository
+import work.temp1209.kakeibo.data.db.ReceiptEntity
 
 @Composable
 fun NotificationsScreen(
     contentPadding: PaddingValues,
     repo: ReceiptRepository,
+    onOpenReceipt: (String) -> Unit,
 ) {
     var queueCount by remember { mutableStateOf(0) }
     var latestError by remember { mutableStateOf<String?>(null) }
+    var needsReview by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
+    var recent by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         queueCount = repo.queueInFlightCount()
         latestError = repo.latestQueueErrorOrNull()
+        needsReview = repo.listNeedsReview(limit = 30)
+        recent = repo.listRecentAnalyzed(limit = 30)
     }
 
     Column(
@@ -38,7 +53,62 @@ fun NotificationsScreen(
     ) {
         Text("解析キュー: ${queueCount}件")
         Text("最終エラー: ${latestError ?: "なし"}")
-        Text("通知履歴/要確認一覧はPhase2後半で追加します。")
+
+        HorizontalDivider(modifier = Modifier.fillMaxWidth())
+
+        Text("要確認（needsReview）: ${needsReview.size}件")
+        if (needsReview.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(needsReview, key = { it.receiptId }) { r ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        onClick = { onOpenReceipt(r.receiptId) },
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("status: ${r.analysisStatus} / error: ${r.analysisErrorMessage ?: "-"}")
+                            Text("merchant: ${r.merchantName ?: "-"} / total: ${r.totalAmountYen ?: "-"}")
+                            Text("receiptDatetime: ${r.receiptDatetime ?: "-"}")
+                        }
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.fillMaxWidth())
+
+        Text("解析結果（最近）: ${recent.size}件")
+        if (recent.isEmpty()) {
+            Text("まだ解析結果がありません。")
+            return@Column
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(recent, key = { it.receiptId }) { r ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    onClick = { onOpenReceipt(r.receiptId) },
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("status: ${r.analysisStatus}")
+                            if (r.needsReview == 1) Text("要確認", color = MaterialTheme.colorScheme.error)
+                        }
+                        Text("merchant: ${r.merchantName ?: "-"} / total: ${r.totalAmountYen ?: "-"}")
+                        Text("receiptDatetime: ${r.receiptDatetime ?: "-"}")
+                    }
+                }
+            }
+        }
     }
 }
 

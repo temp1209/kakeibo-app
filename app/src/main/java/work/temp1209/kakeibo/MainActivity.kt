@@ -182,7 +182,11 @@ private fun AppNav(
                 androidx.compose.material3.Text(modifier = Modifier.padding(16.dp), text = "分析 (TODO)")
             }
             composable(Route.Notifications.value) {
-                NotificationsScreen(contentPadding = PaddingValues(0.dp), repo = repo)
+                NotificationsScreen(
+                    contentPadding = PaddingValues(0.dp),
+                    repo = repo,
+                    onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
+                )
             }
             composable(Route.Settings.value) {
                 SettingsScreen(contentPadding = PaddingValues(0.dp))

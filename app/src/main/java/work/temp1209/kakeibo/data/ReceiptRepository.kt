@@ -144,6 +144,14 @@ class ReceiptRepository(private val context: Context) {
         dao.getLatestQueueErrorOrNull()
     }
 
+    suspend fun listRecentAnalyzed(limit: Int = 30) = withContext(Dispatchers.IO) {
+        dao.listRecentAnalyzed(limit)
+    }
+
+    suspend fun listNeedsReview(limit: Int = 30) = withContext(Dispatchers.IO) {
+        dao.listNeedsReview(limit)
+    }
+
     companion object {
         private const val TAG = "ReceiptRepo"
         private const val UNIQUE_WORK_NAME = "analysis-queue"
