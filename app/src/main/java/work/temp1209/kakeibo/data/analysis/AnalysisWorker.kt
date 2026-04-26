@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import org.json.JSONObject
+import work.temp1209.kakeibo.data.analysis.model.ReceiptItem
 import work.temp1209.kakeibo.data.db.GeminiResultEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
@@ -46,42 +47,31 @@ class AnalysisWorker(
                 )
 
                 val strictJson = extractStrictJson(rawResponse)
-                val parsed = JSONObject(strictJson)
-                val receipt = parsed.getJSONObject("receipt")
-                val itemsArr = parsed.getJSONArray("items")
-                Log.d(TAG, "parsed strictJson items=${itemsArr.length()}")
+                val parsed = GeminiStrictParser.parseStrictJson(strictJson)
+                val flags = GeminiStrictParser.reviewFlags(parsed, confidenceThreshold = 0.7)
+                Log.d(TAG, "parsed strictJson items=${parsed.items.size} needsReview=${flags.needsReview}")
 
-                val merchantName = receipt.getString("merchantName")
-                val receiptDatetime = receipt.getString("receiptDatetime")
-                val totalAmountYen = receipt.getLong("totalAmountYen")
-                val paymentMethod = receipt.optString("paymentMethod").takeIf { it.isNotBlank() }
-                val paymentServiceName = receipt.optString("paymentServiceName").takeIf { it.isNotBlank() }
+                val merchantName = parsed.receipt.merchantName
+                val receiptDatetime = parsed.receipt.receiptDatetime
+                val totalAmountYen = parsed.receipt.totalAmountYen
+                val paymentMethod = parsed.receipt.paymentMethod
+                val paymentServiceName = parsed.receipt.paymentServiceName
 
                 val items = mutableListOf<ReceiptItemEntity>()
                 var subtotal = 0L
-                for (i in 0 until itemsArr.length()) {
-                    val it = itemsArr.getJSONObject(i)
-                    val lineIndex = it.getInt("lineIndex")
-                    val itemName = it.getString("itemName")
-                    val quantity = it.getInt("quantity")
-                    val lineTotalYen = it.getLong("lineTotalYen")
-                    val categoryMajor = it.getString("categoryMajor")
-                    val categoryMinor = it.getString("categoryMinor")
-                    val necessityScore = it.getInt("necessityScore")
-                    val confidence = it.getDouble("confidence")
-
-                    subtotal += lineTotalYen
+                for (it: ReceiptItem in parsed.items) {
+                    subtotal += it.lineTotalYen
                     items += ReceiptItemEntity(
-                        itemId = "${entry.receiptId}:$lineIndex",
+                        itemId = "${entry.receiptId}:${it.lineIndex}",
                         receiptId = entry.receiptId,
-                        lineIndex = lineIndex,
-                        itemName = itemName,
-                        quantity = quantity,
-                        lineTotalYen = lineTotalYen,
-                        categoryMajor = categoryMajor,
-                        categoryMinor = categoryMinor,
-                        necessityScore = necessityScore,
-                        confidence = confidence,
+                        lineIndex = it.lineIndex,
+                        itemName = it.itemName,
+                        quantity = it.quantity,
+                        lineTotalYen = it.lineTotalYen,
+                        categoryMajor = it.categoryMajor,
+                        categoryMinor = it.categoryMinor,
+                        necessityScore = it.necessityScore,
+                        confidence = it.confidence,
                         isAdjustment = 0,
                     )
                 }
@@ -105,6 +95,8 @@ class AnalysisWorker(
 
                 val existing = dao.getReceiptOrNull(entry.receiptId) ?: error("receipt missing")
                 val updatedAt = Instant.now().toString()
+                val receiptStatus = if (flags.needsReview) "FAILED" else "DONE"
+                val errorMessage = if (flags.needsReview) flags.reasons.joinToString("; ") else null
                 dao.upsertReceipt(
                     existing.copy(
                         receiptDatetime = receiptDatetime,
@@ -112,11 +104,11 @@ class AnalysisWorker(
                         totalAmountYen = totalAmountYen,
                         paymentMethod = paymentMethod,
                         paymentServiceName = paymentServiceName,
-                        analysisStatus = "DONE",
+                        analysisStatus = receiptStatus,
                         analysisStartedAt = now,
                         analysisCompletedAt = updatedAt,
-                        analysisErrorMessage = null,
-                        needsReview = 0,
+                        analysisErrorMessage = errorMessage,
+                        needsReview = if (flags.needsReview) 1 else 0,
                         itemsSubtotalYen = subtotal,
                         adjustmentYen = adjustment,
                         updatedAt = updatedAt,
@@ -128,7 +120,7 @@ class AnalysisWorker(
                     GeminiResultEntity(
                         resultId = UUID.randomUUID().toString(),
                         receiptId = entry.receiptId,
-                        schemaVersion = parsed.getString("schemaVersion"),
+                        schemaVersion = parsed.schemaVersion,
                         model = "gemini-2.5-flash",
                         rawJson = strictJson,
                         createdAt = updatedAt,
@@ -142,8 +134,12 @@ class AnalysisWorker(
                     lastError = null,
                     attemptCount = attempt,
                 )
-                AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
-                Log.d(TAG, "done receiptId=${entry.receiptId} subtotal=$subtotal adjustment=$adjustment")
+                if (flags.needsReview) {
+                    AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+                } else {
+                    AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
+                }
+                Log.d(TAG, "done receiptId=${entry.receiptId} status=$receiptStatus subtotal=$subtotal adjustment=$adjustment")
             } catch (e: Exception) {
                 val msg = e.message ?: e.javaClass.simpleName
                 Log.w(TAG, "failed receiptId=${entry.receiptId} attempt=$attempt error=$msg", e)
