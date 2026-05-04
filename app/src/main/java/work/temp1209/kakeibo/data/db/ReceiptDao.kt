@@ -62,8 +62,21 @@ interface ReceiptDao {
     )
     suspend fun listNeedsReview(limit: Int): List<ReceiptEntity>
 
+    @Query("SELECT * FROM receipts ORDER BY updatedAt DESC")
+    suspend fun listAllReceiptsForExport(): List<ReceiptEntity>
+
+    @Query("DELETE FROM receipt_items WHERE receiptId = :receiptId")
+    suspend fun deleteItemsForReceipt(receiptId: String)
+
     @Query("SELECT * FROM receipts WHERE receiptId = :receiptId LIMIT 1")
     suspend fun getReceiptOrNull(receiptId: String): ReceiptEntity?
+
+    @Transaction
+    suspend fun replaceReceiptAndItems(receipt: ReceiptEntity, items: List<ReceiptItemEntity>) {
+        upsertReceipt(receipt)
+        deleteItemsForReceipt(receipt.receiptId)
+        upsertReceiptItems(items)
+    }
 
     @Query("SELECT * FROM receipt_items WHERE receiptId = :receiptId ORDER BY lineIndex ASC")
     suspend fun listReceiptItems(receiptId: String): List<ReceiptItemEntity>
@@ -82,12 +95,6 @@ interface ReceiptDao {
 
     @Query("DELETE FROM analysis_queue WHERE receiptId = :receiptId")
     suspend fun deleteQueueForReceipt(receiptId: String)
-
-    @Transaction
-    suspend fun upsertReceiptAndItems(receipt: ReceiptEntity, items: List<ReceiptItemEntity>) {
-        upsertReceipt(receipt)
-        upsertReceiptItems(items)
-    }
 
     @Query("SELECT * FROM receipt_images WHERE receiptId = :receiptId LIMIT 1")
     suspend fun getReceiptImage(receiptId: String): ReceiptImageEntity?

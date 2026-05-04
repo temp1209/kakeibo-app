@@ -44,6 +44,7 @@ import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import work.temp1209.kakeibo.ui.analysis.AnalysisScreen
 import work.temp1209.kakeibo.ui.review.ReceiptReviewScreen
+import work.temp1209.kakeibo.data.work.DriveBackupScheduler
 
 class MainActivity : ComponentActivity() {
     private val deepLinkReceiptId = mutableStateOf<String?>(null)
@@ -85,6 +86,7 @@ private fun AppNav(
     // 要件: 起動時に40日超過画像を掃除（冪等）
     LaunchedEffect(Unit) {
         repo.cleanupExpiredImages()
+        DriveBackupScheduler.schedule(context)
     }
 
     LaunchedEffect(deepLinkReceiptId) {

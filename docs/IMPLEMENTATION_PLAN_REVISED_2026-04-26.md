@@ -67,10 +67,10 @@
 ---
 
 ## Phase 4: Driveバックアップ（要件どおり）
-- [ ] Google Sign-In + appDataFolder
-- [ ] JSON export/import（画像除外）
-- [ ] 月初処理（archive/full/current-month）
-- [ ] 復元/マージ（updatedAt優先）
+- [x] Google Sign-In + appDataFolder
+- [x] JSON export/import（画像除外）
+- [x] 月初処理（archive/full/current-month）
+- [x] 復元/マージ（updatedAt優先）
 
 ---
 

@@ -68,6 +68,10 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.androidx.work.runtime.ktx)
 
+    implementation(libs.play.services.auth)
+    implementation(libs.gson)
+    implementation(libs.androidx.datastore.preferences)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

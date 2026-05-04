@@ -214,7 +214,7 @@ class ReceiptRepository(private val context: Context) {
             analysisErrorMessage = null,
             updatedAt = now,
         )
-        dao.upsertReceiptAndItems(cleared, items)
+        dao.replaceReceiptAndItems(cleared, items)
         Result.success(Unit)
     }
 
