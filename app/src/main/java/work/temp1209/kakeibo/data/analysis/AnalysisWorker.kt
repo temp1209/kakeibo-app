@@ -32,6 +32,20 @@ class AnalysisWorker(
             dao.markQueueRunning(queueId = entry.queueId, startedAt = now)
 
             val attempt = entry.attemptCount + 1
+            val head = dao.getReceiptOrNull(entry.receiptId)
+            if (head?.deletedAt != null) {
+                val skipAt = Instant.now().toString()
+                Log.d(TAG, "skip queue: receipt deleted receiptId=${entry.receiptId}")
+                dao.finishQueue(
+                    queueId = entry.queueId,
+                    status = "DONE",
+                    finishedAt = skipAt,
+                    lastError = null,
+                    attemptCount = attempt,
+                )
+                continue
+            }
+
             try {
                 val img = dao.getReceiptImage(entry.receiptId) ?: error("receipt image missing")
                 val jpegBytes = applicationContext.contentResolver.openInputStream(android.net.Uri.parse(img.localUri))

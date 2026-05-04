@@ -146,11 +146,12 @@ class ReceiptRepository(private val context: Context) {
         var mandatoryLineCount = 0
         var discretionaryLineCount = 0
         for (it in items) {
+            val yen = it.lineTotalYen
             if (it.necessityScore >= 50) {
-                mandatoryYen += it.lineTotalYen
+                if (yen > 0) mandatoryYen += yen
                 mandatoryLineCount++
             } else {
-                discretionaryYen += it.lineTotalYen
+                if (yen > 0) discretionaryYen += yen
                 discretionaryLineCount++
             }
         }
@@ -177,6 +178,7 @@ class ReceiptRepository(private val context: Context) {
     suspend fun softDeleteReceipt(receiptId: String, deleteReason: String) = withContext(Dispatchers.IO) {
         val now = Instant.now().toString()
         val existing = dao.getReceiptOrNull(receiptId) ?: return@withContext
+        dao.deleteQueueForReceipt(receiptId)
         dao.upsertReceipt(
             existing.copy(
                 deletedAt = now,
@@ -193,6 +195,12 @@ class ReceiptRepository(private val context: Context) {
         receipt: ReceiptEntity,
         items: List<ReceiptItemEntity>,
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        if (receipt.deletedAt != null) {
+            return@withContext Result.failure(IllegalStateException("削除済みのレシートは保存できません"))
+        }
+        if (receipt.analysisStatus == "PENDING" || receipt.analysisStatus == "RUNNING") {
+            return@withContext Result.failure(IllegalStateException("解析完了前に確定できません"))
+        }
         if (!ReceiptRequiredFields.isSatisfiedForReviewComplete(receipt, items)) {
             return@withContext Result.failure(IllegalStateException("必須項目が不足しています"))
         }
@@ -206,8 +214,7 @@ class ReceiptRepository(private val context: Context) {
             analysisErrorMessage = null,
             updatedAt = now,
         )
-        dao.upsertReceipt(cleared)
-        dao.upsertReceiptItems(items)
+        dao.upsertReceiptAndItems(cleared, items)
         Result.success(Unit)
     }
 

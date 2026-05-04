@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,27 +56,52 @@ fun ReceiptReviewScreen(
     onBack: () -> Unit,
     onSaved: () -> Unit,
 ) {
-    var baseReceipt by remember { mutableStateOf<ReceiptEntity?>(null) }
-    var items by remember { mutableStateOf<List<ReceiptItemEntity>>(emptyList()) }
+    var loading by remember(receiptId) { mutableStateOf(true) }
+    var baseReceipt by remember(receiptId) { mutableStateOf<ReceiptEntity?>(null) }
+    var items by remember(receiptId) { mutableStateOf<List<ReceiptItemEntity>>(emptyList()) }
 
-    var merchant by remember { mutableStateOf("") }
-    var receiptDatetime by remember { mutableStateOf("") }
-    var totalText by remember { mutableStateOf("") }
-    var paymentCode by remember { mutableStateOf("UNKNOWN") }
+    var merchant by remember(receiptId) { mutableStateOf("") }
+    var receiptDatetime by remember(receiptId) { mutableStateOf("") }
+    var totalText by remember(receiptId) { mutableStateOf("") }
+    var paymentCode by remember(receiptId) { mutableStateOf("UNKNOWN") }
     var paymentMenu by remember { mutableStateOf(false) }
 
-    var errorText by remember { mutableStateOf<String?>(null) }
+    var errorText by remember(receiptId) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val scroll = rememberScrollState()
 
     LaunchedEffect(receiptId) {
-        val r = repo.getReceiptOrNull(receiptId) ?: return@LaunchedEffect
-        baseReceipt = r
-        items = repo.listReceiptItems(receiptId)
-        merchant = r.merchantName.orEmpty()
-        receiptDatetime = r.receiptDatetime.orEmpty()
-        totalText = r.totalAmountYen?.toString().orEmpty()
-        paymentCode = r.paymentMethod?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+        loading = true
+        try {
+            val r = repo.getReceiptOrNull(receiptId)
+            baseReceipt = r
+            if (r != null) {
+                items = repo.listReceiptItems(receiptId)
+                merchant = r.merchantName.orEmpty()
+                receiptDatetime = r.receiptDatetime.orEmpty()
+                totalText = r.totalAmountYen?.toString().orEmpty()
+                paymentCode = r.paymentMethod?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+            } else {
+                items = emptyList()
+            }
+        } finally {
+            loading = false
+        }
+    }
+
+    if (loading) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            CircularProgressIndicator()
+            Text("読み込み中…", modifier = Modifier.padding(top = 12.dp))
+        }
+        return
     }
 
     val br = baseReceipt
@@ -83,6 +109,14 @@ fun ReceiptReviewScreen(
         Column(Modifier.padding(contentPadding).padding(16.dp)) {
             TextButton(onClick = onBack) { Text("戻る") }
             Text("レシートが見つかりません。")
+        }
+        return
+    }
+
+    if (br.deletedAt != null) {
+        Column(Modifier.padding(contentPadding).padding(16.dp)) {
+            TextButton(onClick = onBack) { Text("戻る") }
+            Text("このレシートは削除済みのため修正できません。")
         }
         return
     }

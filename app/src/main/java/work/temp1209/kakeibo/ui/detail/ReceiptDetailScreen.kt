@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,10 +68,11 @@ fun ReceiptDetailScreen(
     onOpenReview: () -> Unit,
     onDeleteReceipt: suspend (String, deleteReason: String) -> Unit,
 ) {
-    var receipt by remember { mutableStateOf<ReceiptEntity?>(null) }
-    var items by remember { mutableStateOf<List<ReceiptItemEntity>>(emptyList()) }
-    var image by remember { mutableStateOf<ReceiptImageEntity?>(null) }
-    var geminiJson by remember { mutableStateOf<String?>(null) }
+    var loading by remember(receiptId) { mutableStateOf(true) }
+    var receipt by remember(receiptId) { mutableStateOf<ReceiptEntity?>(null) }
+    var items by remember(receiptId) { mutableStateOf<List<ReceiptItemEntity>>(emptyList()) }
+    var image by remember(receiptId) { mutableStateOf<ReceiptImageEntity?>(null) }
+    var geminiJson by remember(receiptId) { mutableStateOf<String?>(null) }
     var showGeminiJson by remember { mutableStateOf(false) }
     var showImageSheet by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -79,10 +81,37 @@ fun ReceiptDetailScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(receiptId) {
-        receipt = loadReceipt(receiptId)
-        items = loadVisibleItems(receiptId)
-        image = loadImage(receiptId)
-        geminiJson = loadGeminiJson(receiptId)
+        loading = true
+        try {
+            val r = loadReceipt(receiptId)
+            receipt = r
+            if (r != null) {
+                items = loadVisibleItems(receiptId)
+                image = loadImage(receiptId)
+                geminiJson = loadGeminiJson(receiptId)
+            } else {
+                items = emptyList()
+                image = null
+                geminiJson = null
+            }
+        } finally {
+            loading = false
+        }
+    }
+
+    if (loading) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            CircularProgressIndicator()
+            Text("読み込み中…", modifier = Modifier.padding(top = 12.dp))
+        }
+        return
     }
 
     val r = receipt
@@ -94,7 +123,7 @@ fun ReceiptDetailScreen(
                 .padding(16.dp),
         ) {
             TextButton(onClick = onBack) { Text("戻る") }
-            Text("読み込み中、またはレシートが見つかりません。")
+            Text("レシートが見つかりません。")
         }
         return
     }
@@ -253,7 +282,9 @@ fun ReceiptDetailScreen(
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
         ) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {

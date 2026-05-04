@@ -35,7 +35,7 @@ interface ReceiptDao {
         (SELECT CASE WHEN SUM(CAST(i.lineTotalYen AS REAL)) > 0
             THEN SUM(CAST(i.lineTotalYen AS REAL) * i.necessityScore) / SUM(CAST(i.lineTotalYen AS REAL))
             ELSE NULL END
-         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0) AS weightedNecessity
+         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity
         FROM receipts r
         WHERE r.deletedAt IS NULL
         AND (:yearMonth = '' OR substr(COALESCE(r.receiptDatetime, r.capturedAt), 1, 7) = :yearMonth)
@@ -75,9 +75,19 @@ interface ReceiptDao {
         WHERE r.deletedAt IS NULL
         AND substr(COALESCE(r.receiptDatetime, r.capturedAt), 1, 7) = :yearMonth
         AND i.isAdjustment = 0
+        ORDER BY i.receiptId ASC, i.lineIndex ASC
         """,
     )
     suspend fun listNonAdjustmentItemsInMonth(yearMonth: String): List<ReceiptItemEntity>
+
+    @Query("DELETE FROM analysis_queue WHERE receiptId = :receiptId")
+    suspend fun deleteQueueForReceipt(receiptId: String)
+
+    @Transaction
+    suspend fun upsertReceiptAndItems(receipt: ReceiptEntity, items: List<ReceiptItemEntity>) {
+        upsertReceipt(receipt)
+        upsertReceiptItems(items)
+    }
 
     @Query("SELECT * FROM receipt_images WHERE receiptId = :receiptId LIMIT 1")
     suspend fun getReceiptImage(receiptId: String): ReceiptImageEntity?

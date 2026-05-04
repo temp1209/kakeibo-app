@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,11 +46,17 @@ fun ReceiptsListScreen(
 ) {
     var rows by remember { mutableStateOf<List<ReceiptListRow>>(emptyList()) }
     var selectedMonth by remember { mutableStateOf<YearMonth?>(YearMonth.now()) }
+    var loading by remember(selectedMonth) { mutableStateOf(true) }
 
     val yearMonthArg = selectedMonth?.toString().orEmpty()
 
     LaunchedEffect(yearMonthArg) {
-        rows = loadReceiptRows(yearMonthArg)
+        loading = true
+        try {
+            rows = loadReceiptRows(yearMonthArg)
+        } finally {
+            loading = false
+        }
     }
 
     Column(
@@ -97,6 +104,18 @@ fun ReceiptsListScreen(
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "翌月")
                 }
             }
+        }
+
+        if (loading) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+                Text("読み込み中…", modifier = Modifier.padding(top = 12.dp))
+            }
+            return@Column
         }
 
         if (rows.isEmpty()) {
