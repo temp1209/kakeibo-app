@@ -32,6 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.db.ReceiptListRow
@@ -43,6 +48,35 @@ import java.time.YearMonth
 
 /** 全期間表示（DB には空文字で渡す。画面状態ではこの定数を使う） */
 const val RECEIPTS_LIST_PERIOD_ALL = "ALL"
+
+/** 一覧左カラム用: 先頭商品名。2 行以上なら末尾に「など」（「など」はやや小さい字） */
+@Composable
+private fun buildFirstItemPreviewAnnotated(
+    firstItemName: String?,
+    nonAdjustmentItemCount: Int,
+): AnnotatedString? {
+    val name = firstItemName?.trim().orEmpty()
+    if (name.isEmpty()) return null
+    val base = MaterialTheme.typography.bodyLarge
+    val etcSize = MaterialTheme.typography.bodySmall.fontSize
+    return buildAnnotatedString {
+        withStyle(
+            SpanStyle(
+                fontSize = base.fontSize,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = base.letterSpacing,
+            ),
+        ) {
+            append(name)
+        }
+        if (nonAdjustmentItemCount >= 2) {
+            append(" ")
+            withStyle(SpanStyle(fontSize = etcSize, fontWeight = FontWeight.Normal)) {
+                append("など")
+            }
+        }
+    }
+}
 
 /** 右下 FAB（56dp 相当）＋マージンで一覧末尾が隠れないように確保する余白 */
 private val ReceiptsListFabBottomClearance = 88.dp
@@ -188,20 +222,62 @@ fun ReceiptsListScreen(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 onClick = { onOpenReceipt(r.receiptId) },
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                val kindLabel =
+                                    when (r.inputKind) {
+                                        "MANUAL_NO_RECEIPT" -> "手入力"
+                                        "EVIDENCE_IMAGE" -> "画像"
+                                        else -> null
+                                    }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top,
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
                                     ) {
                                         Text(
                                             text = formatIsoInstant(r.receiptDatetime ?: r.capturedAt),
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
+                                        val itemPreviewAnnotated =
+                                            buildFirstItemPreviewAnnotated(
+                                                firstItemName = row.firstItemName,
+                                                nonAdjustmentItemCount = row.nonAdjustmentItemCount ?: 0,
+                                            )
+                                        if (itemPreviewAnnotated != null) {
+                                            Text(
+                                                text = itemPreviewAnnotated,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        } else {
+                                            Text(
+                                                text = "（明細なし）",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        Text(
+                                            text = r.merchantName?.ifBlank { "（店名なし）" } ?: "（店名なし）",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                        Text(
+                                            text = "合計 ${formatYen(r.totalAmountYen)}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
                                         Surface(
                                             shape = RoundedCornerShape(16.dp),
                                             color = if (mandatoryHeavy) {
@@ -216,39 +292,31 @@ fun ReceiptsListScreen(
                                                 style = MaterialTheme.typography.labelMedium,
                                             )
                                         }
-                                    }
-                                    val kindLabel =
-                                        when (r.inputKind) {
-                                            "MANUAL_NO_RECEIPT" -> "手入力"
-                                            "EVIDENCE_IMAGE" -> "画像"
-                                            else -> null
+                                        if (kindLabel != null) {
+                                            Surface(
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = MaterialTheme.colorScheme.surface,
+                                            ) {
+                                                Text(
+                                                    text = kindLabel,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
+                                            }
                                         }
-                                    if (kindLabel != null) {
-                                        Surface(
-                                            shape = RoundedCornerShape(16.dp),
-                                            color = MaterialTheme.colorScheme.surface,
-                                        ) {
-                                            Text(
-                                                text = kindLabel,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                style = MaterialTheme.typography.labelSmall,
-                                            )
+                                        if (r.needsReview == 1) {
+                                            Surface(
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = MaterialTheme.colorScheme.errorContainer,
+                                            ) {
+                                                Text(
+                                                    text = "要確認",
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                                )
+                                            }
                                         }
-                                    }
-                                    Text(
-                                        text = r.merchantName?.ifBlank { "（店名なし）" } ?: "（店名なし）",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                    )
-                                    Text(
-                                        text = "合計 ${formatYen(r.totalAmountYen)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    if (r.needsReview == 1) {
-                                        Text(
-                                            text = "要確認",
-                                            color = MaterialTheme.colorScheme.error,
-                                            style = MaterialTheme.typography.labelLarge,
-                                        )
                                     }
                                 }
                             }

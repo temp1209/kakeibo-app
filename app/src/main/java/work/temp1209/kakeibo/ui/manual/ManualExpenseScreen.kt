@@ -52,6 +52,14 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
+
+/** 日付＋時刻（分まで。秒は 0 に揃え TimePicker 表示と一致） */
+private fun nowDateAndTime(zone: ZoneId): Pair<LocalDate, LocalTime> {
+    val z = ZonedDateTime.now(zone)
+    val t = z.toLocalTime().withSecond(0).withNano(0)
+    return z.toLocalDate() to t
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,9 +69,8 @@ fun ManualExpenseScreen(
     onBack: () -> Unit,
 ) {
     val zone = remember { ZoneId.systemDefault() }
-    val today = remember { LocalDate.now(zone) }
-    var date by remember { mutableStateOf(today) }
-    var time by remember { mutableStateOf(LocalTime.MIDNIGHT) }
+    var date by remember(zone) { mutableStateOf(nowDateAndTime(zone).first) }
+    var time by remember(zone) { mutableStateOf(nowDateAndTime(zone).second) }
 
     var merchant by remember { mutableStateOf("") }
     var totalText by remember { mutableStateOf("") }
@@ -178,8 +185,9 @@ fun ManualExpenseScreen(
                                     totalText = ""
                                     paymentCode = "UNKNOWN"
                                     paymentServiceName = ""
-                                    date = LocalDate.now(zone)
-                                    time = LocalTime.MIDNIGHT
+                                    val (d, t) = nowDateAndTime(zone)
+                                    date = d
+                                    time = t
                                     lines = lines.take(1).map { it.copy(itemName = "", quantityText = "1", lineTotalText = "") }
                                 } else {
                                     snackbarHostState.showSnackbar(result.exceptionOrNull()?.message ?: "保存に失敗しました")

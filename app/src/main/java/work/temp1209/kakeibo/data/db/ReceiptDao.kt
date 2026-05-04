@@ -35,7 +35,12 @@ interface ReceiptDao {
         (SELECT CASE WHEN SUM(CAST(i.lineTotalYen AS REAL)) > 0
             THEN SUM(CAST(i.lineTotalYen AS REAL) * i.necessityScore) / SUM(CAST(i.lineTotalYen AS REAL))
             ELSE NULL END
-         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity
+         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity,
+        (SELECT i2.itemName FROM receipt_items i2
+         WHERE i2.receiptId = r.receiptId AND i2.isAdjustment = 0
+         ORDER BY i2.lineIndex ASC LIMIT 1) AS firstItemName,
+        (SELECT COUNT(*) FROM receipt_items i3
+         WHERE i3.receiptId = r.receiptId AND i3.isAdjustment = 0) AS nonAdjustmentItemCount
         FROM receipts r
         WHERE r.deletedAt IS NULL
         AND (:yearMonth = '' OR substr(COALESCE(r.receiptDatetime, r.capturedAt), 1, 7) = :yearMonth)
@@ -53,7 +58,12 @@ interface ReceiptDao {
         (SELECT CASE WHEN SUM(CAST(i.lineTotalYen AS REAL)) > 0
             THEN SUM(CAST(i.lineTotalYen AS REAL) * i.necessityScore) / SUM(CAST(i.lineTotalYen AS REAL))
             ELSE NULL END
-         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity
+         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity,
+        (SELECT i2.itemName FROM receipt_items i2
+         WHERE i2.receiptId = r.receiptId AND i2.isAdjustment = 0
+         ORDER BY i2.lineIndex ASC LIMIT 1) AS firstItemName,
+        (SELECT COUNT(*) FROM receipt_items i3
+         WHERE i3.receiptId = r.receiptId AND i3.isAdjustment = 0) AS nonAdjustmentItemCount
         FROM receipts r
         WHERE r.deletedAt IS NULL
         ORDER BY COALESCE(r.receiptDatetime, r.capturedAt) DESC
