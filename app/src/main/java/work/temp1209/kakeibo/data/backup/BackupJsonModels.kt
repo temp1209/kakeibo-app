@@ -3,7 +3,7 @@ package work.temp1209.kakeibo.data.backup
 import com.google.gson.annotations.SerializedName
 
 data class KakeiboBackupFile(
-    @SerializedName("backupSchemaVersion") val backupSchemaVersion: String = "1.0",
+    @SerializedName("backupSchemaVersion") val backupSchemaVersion: String = "1.1",
     @SerializedName("exportType") val exportType: String,
     @SerializedName("exportedAt") val exportedAt: String,
     @SerializedName("rangeStart") val rangeStart: String,
@@ -25,6 +25,7 @@ data class BackupDataPayload(
 
 data class ReceiptBackupDto(
     @SerializedName("receiptId") val receiptId: String,
+    @SerializedName("inputKind") val inputKind: String? = null,
     @SerializedName("receiptDatetime") val receiptDatetime: String?,
     @SerializedName("capturedAt") val capturedAt: String?,
     @SerializedName("merchantName") val merchantName: String?,

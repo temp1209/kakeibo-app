@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "receipts")
 data class ReceiptEntity(
     @PrimaryKey val receiptId: String,
+    val inputKind: String = "RECEIPT_CAMERA",
     val capturedAt: String,
     val receiptDatetime: String?,
     val analysisStatus: String,
