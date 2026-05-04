@@ -11,7 +11,9 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +45,8 @@ import java.util.UUID
 @Composable
 fun CameraScreen(
     contentPadding: PaddingValues,
+    /** false のときプレビューを隠しカメラを unbind（タブ切替前など） */
+    previewActive: Boolean = true,
     onCaptured: (Uri) -> Unit,
     onOpenList: () -> Unit,
 ) {
@@ -60,8 +64,13 @@ fun CameraScreen(
             .build()
     }
 
-    LaunchedEffect(bindAttempt) {
+    LaunchedEffect(previewActive, bindAttempt) {
         val cameraProvider = ProcessCameraProvider.getInstance(context).get()
+        if (!previewActive) {
+            runCatching { cameraProvider.unbindAll() }
+            return@LaunchedEffect
+        }
+
         val preview = Preview.Builder().build().also {
             it.surfaceProvider = previewView.surfaceProvider
         }
@@ -111,14 +120,26 @@ fun CameraScreen(
     ) {
         SnackbarHost(hostState = snackbarHostState)
 
-        AndroidView(
-            factory = { previewView },
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxSize(),
-        )
+        if (previewActive) {
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface),
+            )
+        }
 
-        Button(onClick = { onOpenList() }) {
+        Button(
+            onClick = { onOpenList() },
+            enabled = previewActive,
+        ) {
             Text("一覧を開く")
         }
 
@@ -131,7 +152,8 @@ fun CameraScreen(
                     onSuccess = onCaptured,
                     onError = { errorMessage = it },
                 )
-            }
+            },
+            enabled = previewActive,
         ) {
             Text("撮影")
         }

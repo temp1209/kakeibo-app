@@ -14,7 +14,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.runtime.DisposableEffect
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -22,9 +21,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.core.net.toUri
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -45,6 +45,11 @@ import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import work.temp1209.kakeibo.ui.analysis.AnalysisScreen
 import work.temp1209.kakeibo.ui.review.ReceiptReviewScreen
 import work.temp1209.kakeibo.data.work.DriveBackupScheduler
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
+private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
 
 class MainActivity : ComponentActivity() {
     private val deepLinkReceiptId = mutableStateOf<String?>(null)
@@ -97,6 +102,8 @@ private fun AppNav(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val scope = rememberCoroutineScope()
+    var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -107,10 +114,33 @@ private fun AppNav(
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
-                            navController.navigate(tab.route.value) {
-                                popUpTo(Route.Camera.value) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                            val target = tab.route.value
+                            val currentRoute = currentDestination?.route
+                            val leavingCamera =
+                                currentRoute == Route.Camera.value && target != Route.Camera.value
+                            scope.launch {
+                                if (leavingCamera) {
+                                    cameraPreviewSuppressed = true
+                                    try {
+                                        delay(CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS)
+                                        navController.navigate(target) {
+                                            popUpTo(Route.Camera.value) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    } finally {
+                                        cameraPreviewSuppressed = false
+                                    }
+                                } else {
+                                    if (target == Route.Camera.value) {
+                                        cameraPreviewSuppressed = false
+                                    }
+                                    navController.navigate(target) {
+                                        popUpTo(Route.Camera.value) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
                             }
                         },
                         icon = { androidx.compose.material3.Icon(tab.icon, contentDescription = tab.label) },
@@ -130,10 +160,33 @@ private fun AppNav(
                     onGranted = {
                         CameraScreen(
                             contentPadding = PaddingValues(0.dp),
+                            previewActive = !cameraPreviewSuppressed,
                             onCaptured = { uri ->
-                                navController.navigate(Route.Preview.create(uri))
+                                scope.launch {
+                                    cameraPreviewSuppressed = true
+                                    try {
+                                        delay(CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS)
+                                        navController.navigate(Route.Preview.create(uri))
+                                    } finally {
+                                        cameraPreviewSuppressed = false
+                                    }
+                                }
                             },
-                            onOpenList = { navController.navigate(Route.List.value) },
+                            onOpenList = {
+                                scope.launch {
+                                    cameraPreviewSuppressed = true
+                                    try {
+                                        delay(CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS)
+                                        navController.navigate(Route.List.value) {
+                                            popUpTo(Route.Camera.value) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    } finally {
+                                        cameraPreviewSuppressed = false
+                                    }
+                                }
+                            },
                         )
                     },
                     onDenied = {
