@@ -6,7 +6,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import org.json.JSONObject
 import work.temp1209.kakeibo.data.analysis.model.ReceiptItem
+import work.temp1209.kakeibo.data.db.AnalysisQueueEntity
 import work.temp1209.kakeibo.data.db.GeminiResultEntity
+import work.temp1209.kakeibo.data.db.ReceiptDao
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
@@ -62,7 +64,18 @@ class AnalysisWorker(
                 )
 
                 val strictJson = extractStrictJson(rawResponse)
-                val parsed = GeminiStrictParser.parseStrictJson(strictJson)
+                val parsed = try {
+                    GeminiStrictParser.parseStrictJson(strictJson)
+                } catch (_: NoReceiptInImageException) {
+                    handleNoReceiptFailure(
+                        dao = dao,
+                        entry = entry,
+                        strictJson = strictJson,
+                        now = now,
+                        attempt = attempt,
+                    )
+                    continue
+                }
                 val flags = GeminiStrictParser.reviewFlags(parsed, confidenceThreshold = 0.7)
                 Log.d(TAG, "parsed strictJson items=${parsed.items.size} needsReview=${flags.needsReview}")
 
@@ -205,6 +218,53 @@ class AnalysisWorker(
         return Result.success()
     }
 
+    /**
+     * モデルが `[NO_RECEIPT]` を返した場合: リトライせず解析失敗として確定する（生JSONは保存）。
+     */
+    private suspend fun handleNoReceiptFailure(
+        dao: ReceiptDao,
+        entry: AnalysisQueueEntity,
+        strictJson: String,
+        now: String,
+        attempt: Int,
+    ) {
+        val finishedAt = Instant.now().toString()
+        val receiptId = entry.receiptId
+        val existing = dao.getReceiptOrNull(receiptId) ?: return
+        val message = "画像にレシートが見当たりません。別の画像で試してください。"
+        dao.insertGeminiResult(
+            GeminiResultEntity(
+                resultId = UUID.randomUUID().toString(),
+                receiptId = receiptId,
+                schemaVersion = "1.0",
+                model = "gemini-2.5-flash",
+                rawJson = strictJson,
+                createdAt = finishedAt,
+            ),
+        )
+        dao.upsertReceipt(
+            existing.copy(
+                analysisStatus = "FAILED",
+                analysisStartedAt = existing.analysisStartedAt ?: now,
+                analysisCompletedAt = finishedAt,
+                analysisErrorMessage = message,
+                needsReview = 1,
+                updatedAt = finishedAt,
+            ),
+        )
+        dao.finishQueue(
+            queueId = entry.queueId,
+            status = "FAILED",
+            finishedAt = finishedAt,
+            lastError = message,
+            attemptCount = attempt,
+        )
+        if (shouldSendAnalysisOsNotification(existing)) {
+            AnalysisNotifications.notifyFailed(applicationContext, receiptId)
+        }
+        Log.w(TAG, "no receipt in image receiptId=$receiptId")
+    }
+
     private fun extractStrictJson(rawResponse: String): String {
         // generateContent response: candidates[0].content.parts[0].text
         val root = JSONObject(rawResponse)
@@ -236,6 +296,22 @@ class AnalysisWorker(
 2) 型番・SKU・品番のみ印字の商品を、売場文脈から分かる日本語名へ書き換えること
 3) 支払手段の表記を列挙値へ正規化し、カテゴリ（後述の major/minor **許可ペア**）を文脈から付与すること
 上記以外（各金額・日付の数字・店名の主要表記など）は、レシートに読み取れる範囲で忠実に転記する。読めない箇所は捏造せず、confidence を下げ warnings に `[読取]` 等で記載する。
+
+## レシートが画像にないとき（最重要）
+次のいずれかに該当し、**会計上の販売レシート・領収（購入の合計・店名・日付が読み取れる伝票）として合理的に復元できない**と判断した場合:
+- 何も写っていない／真っ暗・壁・床・無関係な物体のみ
+- レシートではない書類（チラシ、メモ、配送伝票のみ、無関係なWeb画面のスクショ等）だけで、購入レシートの体裁がない
+- レシートの断片のみで店名・合計・日付のいずれも確信できず、推測で埋めると誤記録になる
+
+このとき **通常の抽出結果を捏造してはならない**。代わりに次を **すべて**満たす厳格JSONのみを返すこと:
+1) `warnings` に **`[NO_RECEIPT]` と完全一致する文字列** を **1要素以上** 含める（他の警告文字列と併用可）
+2) `items` は **空配列 `[]`**
+3) `receipt.merchantName` は **`不明`**
+4) `receipt.totalAmountYen` は **0**
+5) `receipt.receiptDatetime` は **`1970-01-01T00:00:00+09:00`**（プレースホルダ。実取引の日時として使わない）
+6) `receipt.paymentMethod` は **UNKNOWN** か省略（可能なら UNKNOWN）
+
+【禁止】レシートが無いのに、見込みで店名・金額・明細を創作すること。
 
 ## 出力ルール（最重要）
 - 出力は JSON のみ（前後に説明文/コードフェンス/注釈を付けない）

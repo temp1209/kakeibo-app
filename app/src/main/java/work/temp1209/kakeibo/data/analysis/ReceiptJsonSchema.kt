@@ -134,7 +134,17 @@ object ReceiptJsonSchema {
                     .put("schemaVersion", JSONObject().put("type", "string").put("enum", JSONArray().put("1.0")))
                     .put("receipt", receipt)
                     .put("items", JSONObject().put("type", "array").put("items", item))
-                    .put("warnings", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string"))),
+                    .put(
+                        "warnings",
+                        JSONObject()
+                            .put("type", "array")
+                            .put("items", JSONObject().put("type", "string"))
+                            .put(
+                                "description",
+                                "解析上の注意（日本語短文の配列）。画像に売上レシート・領収として読み取れる内容が全くない場合は、" +
+                                    "この配列に **`[NO_RECEIPT]` と完全一致する文字列** を1要素以上含める（他の警告と併用可）。その場合 items は空配列。",
+                            ),
+                    ),
             )
             .put("required", JSONArray().put("schemaVersion").put("receipt").put("items"))
     }

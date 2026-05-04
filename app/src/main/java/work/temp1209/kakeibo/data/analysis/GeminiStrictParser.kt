@@ -8,6 +8,11 @@ import work.temp1209.kakeibo.data.analysis.model.ReceiptHeader
 import work.temp1209.kakeibo.data.analysis.model.ReceiptItem
 import work.temp1209.kakeibo.data.analysis.model.ReviewFlags
 
+/** モデルが `warnings` に `[NO_RECEIPT]` を含めたときに送出し、解析を失敗扱いにする。 */
+class NoReceiptInImageException(
+    message: String = "画像にレシートが見当たりません。別の画像で試してください。",
+) : Exception(message)
+
 object GeminiStrictParser {
     fun parseStrictJson(strictJson: String): GeminiReceiptResponse {
         val root = JSONObject(strictJson)
@@ -41,6 +46,9 @@ object GeminiStrictParser {
         }
 
         val warnings = root.optJSONArray("warnings")?.toStringList().orEmpty()
+        if (warnings.any { it.trim() == "[NO_RECEIPT]" }) {
+            throw NoReceiptInImageException()
+        }
 
         return GeminiReceiptResponse(
             schemaVersion = schemaVersion,
