@@ -54,6 +54,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.YearMonth
 import work.temp1209.kakeibo.ui.manual.ManualExpenseScreen
+import work.temp1209.kakeibo.data.image.EvidenceImageImporter
 
 /** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
 private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
@@ -124,8 +125,13 @@ private fun AppNav(
     val evidencePickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
-                setPreviewInputKind("EVIDENCE_IMAGE")
-                navController.navigate(Route.Preview.create(uri))
+                scope.launch {
+                    runCatching {
+                        val internalUri = EvidenceImageImporter.importToInternalJpeg(context, uri)
+                        val receiptId = repo.savePendingReceipt(internalUri, inputKind = "EVIDENCE_IMAGE")
+                        navController.navigate(Route.PreviewDraft.create(receiptId))
+                    }
+                }
             }
         }
 
@@ -253,6 +259,50 @@ private fun AppNav(
                 if (saving) {
                     LaunchedEffect(imageUri) {
                         val receiptId = repo.savePendingReceipt(imageUri, inputKind = inputKind)
+                        repo.enqueueAnalysis(receiptId)
+                        navController.navigate(Route.Camera.value) {
+                            popUpTo(Route.Camera.value) { inclusive = true }
+                        }
+                    }
+                }
+            }
+
+            composable(
+                route = Route.PreviewDraft.value,
+                arguments = listOf(navArgument("receiptId") { type = NavType.StringType }),
+            ) {
+                val receiptId = it.arguments?.getString("receiptId") ?: return@composable
+                var loadedImageUri by remember(receiptId) { mutableStateOf<Uri?>(null) }
+                var saving by remember(receiptId) { mutableStateOf(false) }
+
+                LaunchedEffect(receiptId) {
+                    val img = repo.getReceiptImage(receiptId)
+                    loadedImageUri = img?.localUri?.let { s -> runCatching { Uri.parse(s) }.getOrNull() }
+                }
+
+                val imageUri = loadedImageUri
+                if (imageUri == null) {
+                    androidx.compose.material3.Text(
+                        modifier = Modifier.padding(16.dp),
+                        text = "画像の読み込みに失敗しました。",
+                    )
+                    return@composable
+                }
+
+                PreviewScreen(
+                    contentPadding = PaddingValues(0.dp),
+                    imageUri = imageUri,
+                    onCancel = {
+                        scope.launch {
+                            repo.deleteDraftReceipt(receiptId)
+                            navController.popBackStack()
+                        }
+                    },
+                    onConfirm = { if (!saving) saving = true },
+                )
+
+                if (saving) {
+                    LaunchedEffect(receiptId) {
                         repo.enqueueAnalysis(receiptId)
                         navController.navigate(Route.Camera.value) {
                             popUpTo(Route.Camera.value) { inclusive = true }

@@ -140,6 +140,12 @@ interface ReceiptDao {
     @Query("UPDATE receipt_images SET deletedAt = :deletedAt WHERE receiptId = :receiptId")
     suspend fun markImageDeleted(receiptId: String, deletedAt: String)
 
+    @Query("DELETE FROM receipt_images WHERE receiptId = :receiptId")
+    suspend fun deleteReceiptImage(receiptId: String)
+
+    @Query("DELETE FROM receipts WHERE receiptId = :receiptId")
+    suspend fun deleteReceipt(receiptId: String)
+
     @Transaction
     suspend fun enqueueOnce(receiptId: String, queuedAt: String): Boolean {
         return try {

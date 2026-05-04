@@ -340,6 +340,25 @@ class ReceiptRepository(private val context: Context) {
         deleted
     }
 
+    /**
+     * プレビュー中にキャンセルされた下書き（PENDING）を削除する。
+     * - DBから receipts / receipt_images を消す
+     * - 内部ファイルを物理削除する（file:// のみ）
+     */
+    suspend fun deleteDraftReceipt(receiptId: String): Unit = withContext(Dispatchers.IO) {
+        dao.deleteQueueForReceipt(receiptId)
+        val img = dao.getReceiptImage(receiptId)
+        if (img != null) {
+            val uri = runCatching { Uri.parse(img.localUri) }.getOrNull()
+            val file = uri?.toFileOrNull()
+            if (file != null && file.exists()) {
+                runCatching { file.delete() }
+            }
+        }
+        dao.deleteReceiptImage(receiptId)
+        dao.deleteReceipt(receiptId)
+    }
+
     private fun Uri.toFileOrNull(): File? {
         if (scheme != "file") return null
         val p = path ?: return null
