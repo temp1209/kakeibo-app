@@ -1,6 +1,7 @@
 package work.temp1209.kakeibo.data.drive
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import kotlinx.coroutines.Dispatchers
@@ -30,37 +31,41 @@ object DriveBackupOrchestrator {
 
     suspend fun runWithAccount(context: Context, account: GoogleSignInAccount): Result<Unit> =
         withContext(Dispatchers.IO) {
-            val token = DriveBackupRepository.getAccessToken(context, account)
-            val dao = AppDatabase.get(context).receiptDao()
-            val prefs = DriveBackupPrefs(context)
-            val zone = ZoneId.systemDefault()
-            val nowYm = YearMonth.now(zone)
+            runCatching {
+                val token = DriveBackupRepository.getAccessToken(context, account)
+                val dao = AppDatabase.get(context).receiptDao()
+                val prefs = DriveBackupPrefs(context)
+                val zone = ZoneId.systemDefault()
+                val nowYm = YearMonth.now(zone)
 
-            val lastJobYm = prefs.lastMonthJobYearMonthOrNull()
-            if (lastJobYm != nowYm.toString()) {
-                runMonthBoundary(context, token, dao, nowYm, zone)
-                prefs.setLastMonthJobYearMonth(nowYm.toString())
-            }
+                val lastJobYm = prefs.lastMonthJobYearMonthOrNull()
+                if (lastJobYm != nowYm.toString()) {
+                    runMonthBoundary(context, token, dao, nowYm, zone)
+                    prefs.setLastMonthJobYearMonth(nowYm.toString())
+                }
 
-            val (start, end) = BackupExportBuilder.currentMonthWindow(zone)
-            val all = dao.listAllReceiptsForExport()
-            val monthReceipts = all.filter { r ->
-                val t = BackupExportBuilder.receiptTimestamp(r) ?: return@filter false
-                !t.isBefore(start) && !t.isAfter(end)
-            }
-            val ids = monthReceipts.map { it.receiptId }.toSet()
-            val monthItems = ids.flatMap { rid -> dao.listReceiptItems(rid) }
-            val cur = BackupExportBuilder.buildFile(
-                context = context,
-                exportType = BackupExportTypes.CURRENT_MONTH,
-                rangeStart = start,
-                rangeEnd = end,
-                receipts = monthReceipts,
-                items = monthItems,
+                val (start, end) = BackupExportBuilder.currentMonthWindow(zone)
+                val all = dao.listAllReceiptsForExport()
+                val monthReceipts = all.filter { r ->
+                    val t = BackupExportBuilder.receiptTimestamp(r) ?: return@filter false
+                    !t.isBefore(start) && !t.isAfter(end)
+                }
+                val ids = monthReceipts.map { it.receiptId }.toSet()
+                val monthItems = ids.flatMap { rid -> dao.listReceiptItems(rid) }
+                val cur = BackupExportBuilder.buildFile(
+                    context = context,
+                    exportType = BackupExportTypes.CURRENT_MONTH,
+                    rangeStart = start,
+                    rangeEnd = end,
+                    receipts = monthReceipts,
+                    items = monthItems,
+                )
+                DriveBackupRepository.uploadOrReplaceJson(token, CURRENT_MONTH_FILE, BackupJsonCodec.toJson(cur))
+                prefs.setLastBackupAt(Instant.now().toString())
+            }.fold(
+                onSuccess = { Result.success(Unit) },
+                onFailure = { Result.failure(it) },
             )
-            DriveBackupRepository.uploadOrReplaceJson(token, CURRENT_MONTH_FILE, BackupJsonCodec.toJson(cur))
-            prefs.setLastBackupAt(Instant.now().toString())
-            Result.success(Unit)
         }
 
     private suspend fun runMonthBoundary(
@@ -117,33 +122,40 @@ object DriveBackupOrchestrator {
     }
 
     suspend fun restoreMergeFromDrive(context: Context): Result<BackupMerge.MergeStats> = withContext(Dispatchers.IO) {
-        val account = GoogleSignIn.getLastSignedInAccount(context)
-            ?: return@withContext Result.failure(IllegalStateException("Googleにログインしていません"))
-        val token = DriveBackupRepository.getAccessToken(context, account)
-        val dao = AppDatabase.get(context).receiptDao()
-        val files = DriveBackupRepository.listJsonFiles(token)
-        val bodies = mutableListOf<String>()
+        runCatching {
+            val account = GoogleSignIn.getLastSignedInAccount(context)
+                ?: throw IllegalStateException("Googleにログインしていません")
+            val token = DriveBackupRepository.getAccessToken(context, account)
+            val db = AppDatabase.get(context)
+            val dao = db.receiptDao()
+            val files = DriveBackupRepository.listJsonFiles(token)
+            val bodies = mutableListOf<String>()
 
-        files.filter { it.name.startsWith("full-") && it.name.endsWith(".json") }
-            .sortedBy { it.modifiedTimeMs }
-            .forEach { f ->
+            files.filter { it.name.startsWith("full-") && it.name.endsWith(".json") }
+                .sortedBy { it.modifiedTimeMs }
+                .forEach { f ->
+                    DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
+                }
+
+            files.filter { it.name.startsWith("archive-") && it.name.endsWith(".json") }
+                .sortedBy { it.name }
+                .forEach { f ->
+                    DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
+                }
+
+            files.find { it.name == CURRENT_MONTH_FILE }?.let { f ->
                 DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
             }
 
-        files.filter { it.name.startsWith("archive-") && it.name.endsWith(".json") }
-            .sortedBy { it.name }
-            .forEach { f ->
-                DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
+            if (bodies.isEmpty()) {
+                throw IllegalStateException("Drive上にバックアップJSONが見つかりません")
             }
-
-        files.find { it.name == CURRENT_MONTH_FILE }?.let { f ->
-            DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
-        }
-
-        if (bodies.isEmpty()) {
-            return@withContext Result.failure(IllegalStateException("Drive上にバックアップJSONが見つかりません"))
-        }
-        val stats = BackupMerge.mergeFilesIntoDb(dao, bodies)
-        Result.success(stats)
+            db.withTransaction {
+                BackupMerge.mergeFilesIntoDb(dao, bodies)
+            }
+        }.fold(
+            onSuccess = { Result.success(it) },
+            onFailure = { Result.failure(it) },
+        )
     }
 }

@@ -7,7 +7,12 @@ import java.time.Instant
 
 object BackupMerge {
 
-    data class MergeStats(val receiptsApplied: Int, val receiptsSkipped: Int)
+    data class MergeStats(
+        val receiptsApplied: Int,
+        val receiptsSkipped: Int,
+        /** JSON パースに失敗してスキップしたファイル／ブロック数 */
+        val jsonParseFailures: Int = 0,
+    )
 
     /**
      * 要件: receipts は updatedAt が新しい方を採用。採用時は明細をバックアップ側で置換。
@@ -33,13 +38,22 @@ object BackupMerge {
     suspend fun mergeFilesIntoDb(dao: ReceiptDao, jsonBodiesInOrder: List<String>): MergeStats {
         var totalApplied = 0
         var totalSkipped = 0
+        var parseFailures = 0
         for (body in jsonBodiesInOrder) {
-            val file = runCatching { BackupJsonCodec.fromJson(body) }.getOrNull() ?: continue
+            val file = runCatching { BackupJsonCodec.fromJson(body) }.getOrNull()
+            if (file == null) {
+                parseFailures++
+                continue
+            }
             val stats = mergeIntoDb(dao, file.data)
             totalApplied += stats.receiptsApplied
             totalSkipped += stats.receiptsSkipped
         }
-        return MergeStats(receiptsApplied = totalApplied, receiptsSkipped = totalSkipped)
+        return MergeStats(
+            receiptsApplied = totalApplied,
+            receiptsSkipped = totalSkipped,
+            jsonParseFailures = parseFailures,
+        )
     }
 
     private fun isRemoteNewer(remoteUpdatedAt: String, localUpdatedAt: String): Boolean {

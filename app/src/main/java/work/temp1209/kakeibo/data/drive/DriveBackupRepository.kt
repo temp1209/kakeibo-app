@@ -5,6 +5,7 @@ import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -25,6 +26,7 @@ object DriveBackupRepository {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
+        .callTimeout(180, TimeUnit.SECONDS)
         .build()
 
     private const val API_BASE = "https://www.googleapis.com/drive/v3"
@@ -40,28 +42,45 @@ object DriveBackupRepository {
         )
     }
 
+    private fun filesListUrl(pageToken: String?): String {
+        val b = "$API_BASE/files".toHttpUrl().newBuilder()
+            .addQueryParameter("spaces", "appDataFolder")
+            .addQueryParameter("fields", "nextPageToken,files(id,name,mimeType,modifiedTime)")
+            .addQueryParameter("pageSize", "200")
+        if (!pageToken.isNullOrEmpty()) {
+            b.addQueryParameter("pageToken", pageToken)
+        }
+        return b.build().toString()
+    }
+
     suspend fun listJsonFiles(token: String): List<DriveFileMeta> = withContext(Dispatchers.IO) {
-        val url = "$API_BASE/files?spaces=appDataFolder&fields=files(id,name,mimeType,modifiedTime)&pageSize=200"
-        val req = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .get()
-            .build()
-        http.newCall(req).execute().use { resp ->
-            val body = resp.body?.string() ?: return@withContext emptyList()
-            if (!resp.isSuccessful) error("Drive list failed: ${resp.code} $body")
-            val arr = JSONObject(body).optJSONArray("files") ?: JSONArray()
-            buildList {
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    val id = o.optString("id", "")
-                    val name = o.optString("name", "")
-                    if (id.isBlank()) continue
-                    val mt = o.optString("modifiedTime", "")
-                    val ms = runCatching { java.time.Instant.parse(mt).toEpochMilli() }.getOrDefault(0L)
-                    add(DriveFileMeta(id = id, name = name, modifiedTimeMs = ms))
+        buildList {
+            var pageToken: String? = null
+            do {
+                val req = Request.Builder()
+                    .url(filesListUrl(pageToken))
+                    .header("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+                http.newCall(req).execute().use { resp ->
+                    val body = resp.body?.string() ?: ""
+                    if (!resp.isSuccessful) {
+                        throw DriveHttpException(resp.code, "Drive list failed: ${resp.code} $body")
+                    }
+                    val root = JSONObject(body)
+                    pageToken = root.optString("nextPageToken", "").takeIf { it.isNotEmpty() }
+                    val arr = root.optJSONArray("files") ?: JSONArray()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        val id = o.optString("id", "")
+                        val name = o.optString("name", "")
+                        if (id.isBlank()) continue
+                        val mt = o.optString("modifiedTime", "")
+                        val ms = runCatching { java.time.Instant.parse(mt).toEpochMilli() }.getOrDefault(0L)
+                        add(DriveFileMeta(id = id, name = name, modifiedTimeMs = ms))
+                    }
                 }
-            }
+            } while (!pageToken.isNullOrEmpty())
         }
     }
 
@@ -79,7 +98,10 @@ object DriveBackupRepository {
                 .put(media)
                 .build()
             http.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) error("Drive upload failed: ${resp.code} ${resp.body?.string()}")
+                val errBody = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    throw DriveHttpException(resp.code, "Drive upload failed: ${resp.code} $errBody")
+                }
             }
         } else {
             val metaJson = JSONObject()
@@ -92,8 +114,10 @@ object DriveBackupRepository {
                 .post(metaJson.toRequestBody("application/json; charset=UTF-8".toMediaType()))
                 .build()
             val id = http.newCall(createReq).execute().use { resp ->
-                val b = resp.body?.string() ?: error("empty body")
-                if (!resp.isSuccessful) error("Drive create failed: ${resp.code} $b")
+                val b = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    throw DriveHttpException(resp.code, "Drive create failed: ${resp.code} $b")
+                }
                 JSONObject(b).getString("id")
             }
             val putUrl = "$UPLOAD_BASE/files/$id?uploadType=media"
@@ -102,8 +126,16 @@ object DriveBackupRepository {
                 .header("Authorization", "Bearer $token")
                 .put(media)
                 .build()
-            http.newCall(putReq).execute().use { resp ->
-                if (!resp.isSuccessful) error("Drive media upload failed: ${resp.code} ${resp.body?.string()}")
+            try {
+                http.newCall(putReq).execute().use { resp ->
+                    val errBody = resp.body?.string().orEmpty()
+                    if (!resp.isSuccessful) {
+                        throw DriveHttpException(resp.code, "Drive media upload failed: ${resp.code} $errBody")
+                    }
+                }
+            } catch (e: Exception) {
+                runCatching { deleteById(token, id) }
+                throw e
             }
         }
     }
@@ -127,6 +159,6 @@ object DriveBackupRepository {
             .header("Authorization", "Bearer $token")
             .delete()
             .build()
-        runCatching { http.newCall(req).execute().close() }
+        http.newCall(req).execute().use { }
     }
 }

@@ -235,7 +235,12 @@ fun SettingsScreen(
                     snackbarHostState.showSnackbar(
                         if (r.isSuccess) {
                             val s = r.getOrNull()
-                            "復元マージ完了（反映 ${s?.receiptsApplied}件、スキップ ${s?.receiptsSkipped}件）"
+                            buildString {
+                                append("復元マージ完了（反映 ${s?.receiptsApplied}件、スキップ ${s?.receiptsSkipped}件）")
+                                if ((s?.jsonParseFailures ?: 0) > 0) {
+                                    append("、JSON無効 ${s?.jsonParseFailures}件")
+                                }
+                            }
                         } else {
                             "復元失敗: ${r.exceptionOrNull()?.message}"
                         },
