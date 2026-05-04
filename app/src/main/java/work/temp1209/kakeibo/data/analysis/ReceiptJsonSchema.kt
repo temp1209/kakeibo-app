@@ -79,7 +79,15 @@ object ReceiptJsonSchema {
                 "properties",
                 JSONObject()
                     .put("lineIndex", JSONObject().put("type", "integer").put("minimum", 0))
-                    .put("itemName", JSONObject().put("type", "string"))
+                    .put(
+                        "itemName",
+                        JSONObject()
+                            .put("type", "string")
+                            .put(
+                                "description",
+                                "1明細=1商品。セット・コンボは1行に統合し、サイド/ドリンク等を括弧内に含める。Lアップ差額・氷抜き0円等の付随行は出さない。型番・品番のみ印字のときは、売場・店名などから推定した具体的な日本語名に書き換え、型番のみにしない。",
+                            ),
+                    )
                     .put("quantity", JSONObject().put("type", "integer").put("minimum", 1))
                     .put("lineTotalYen", JSONObject().put("type", "integer").put("minimum", 0))
                     .put("categoryMajor", JSONObject().put("type", "string").put("enum", categoryMajorEnum))
