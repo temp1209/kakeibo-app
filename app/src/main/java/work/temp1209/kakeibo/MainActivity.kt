@@ -53,6 +53,7 @@ import work.temp1209.kakeibo.data.work.DriveBackupScheduler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.YearMonth
+import work.temp1209.kakeibo.ui.manual.ManualExpenseScreen
 
 /** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
 private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
@@ -278,9 +279,10 @@ private fun AppNav(
             }
 
             composable(Route.ManualEntry.value) {
-                androidx.compose.material3.Text(
-                    modifier = Modifier.padding(16.dp),
-                    text = "手入力（Phase6）: 実装中",
+                ManualExpenseScreen(
+                    contentPadding = PaddingValues(0.dp),
+                    repo = repo,
+                    onBack = { navController.popBackStack() },
                 )
             }
 
