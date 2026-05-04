@@ -63,7 +63,15 @@ object ReceiptJsonSchema {
             .put(
                 "properties",
                 JSONObject()
-                    .put("receiptDatetime", JSONObject().put("type", "string"))
+                    .put(
+                        "receiptDatetime",
+                        JSONObject()
+                            .put("type", "string")
+                            .put(
+                                "description",
+                                "ISO 8601、日本時刻想定で末尾+09:00（例 2024-05-01T14:30:00+09:00）。時刻不明なら同日T00:00:00+09:00。",
+                            ),
+                    )
                     .put("capturedAt", JSONObject().put("type", "string"))
                     .put("merchantName", JSONObject().put("type", "string"))
                     .put("totalAmountYen", JSONObject().put("type", "integer").put("minimum", 0))
@@ -78,14 +86,23 @@ object ReceiptJsonSchema {
             .put(
                 "properties",
                 JSONObject()
-                    .put("lineIndex", JSONObject().put("type", "integer").put("minimum", 0))
+                    .put(
+                        "lineIndex",
+                        JSONObject()
+                            .put("type", "integer")
+                            .put("minimum", 0)
+                            .put(
+                                "description",
+                                "itemsに出力する商品行を上から0起算の連番。セット統合後もレシート内で一意。",
+                            ),
+                    )
                     .put(
                         "itemName",
                         JSONObject()
                             .put("type", "string")
                             .put(
                                 "description",
-                                "1明細=1商品。セット・コンボは1行に統合し、サイド/ドリンク等を括弧内に含める。Lアップ差額・氷抜き0円等の付随行は出さない。型番・品番のみ印字のときは、売場・店名などから推定した具体的な日本語名に書き換え、型番のみにしない。",
+                                "送信プロンプトの「1明細=1商品」「セット統合」「型番からの日本語名」に従う。",
                             ),
                     )
                     .put("quantity", JSONObject().put("type", "integer").put("minimum", 1))
