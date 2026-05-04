@@ -194,6 +194,24 @@ fun ReceiptsListScreen(
                                 )
                             }
                         }
+                        val kindLabel =
+                            when (r.inputKind) {
+                                "MANUAL_NO_RECEIPT" -> "手入力"
+                                "EVIDENCE_IMAGE" -> "画像"
+                                else -> null
+                            }
+                        if (kindLabel != null) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                            ) {
+                                Text(
+                                    text = kindLabel,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
                         Text(
                             text = r.merchantName?.ifBlank { "（店名なし）" } ?: "（店名なし）",
                             style = MaterialTheme.typography.bodyLarge,

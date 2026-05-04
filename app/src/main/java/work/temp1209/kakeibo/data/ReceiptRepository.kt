@@ -359,6 +359,32 @@ class ReceiptRepository(private val context: Context) {
         dao.deleteReceipt(receiptId)
     }
 
+    /**
+     * Phase6: 証拠画像の解析失敗時に「手入力へ切り替え」する。
+     * - inputKind を MANUAL_NO_RECEIPT に変更
+     * - backupRevision を +1
+     * - 明細・画像・gemini_results は保持（この関数では触らない）
+     */
+    suspend fun switchEvidenceFailedToManual(receiptId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val existing = dao.getReceiptOrNull(receiptId)
+            ?: return@withContext Result.failure(IllegalStateException("レシートが見つかりません"))
+        if (existing.inputKind != "EVIDENCE_IMAGE") {
+            return@withContext Result.failure(IllegalStateException("証拠画像のレシートではありません"))
+        }
+        if (existing.analysisStatus != "FAILED") {
+            return@withContext Result.failure(IllegalStateException("解析失敗のレシートではありません"))
+        }
+        val now = Instant.now().toString()
+        dao.upsertReceipt(
+            existing.copy(
+                inputKind = "MANUAL_NO_RECEIPT",
+                backupRevision = existing.backupRevision + 1,
+                updatedAt = now,
+            ),
+        )
+        Result.success(Unit)
+    }
+
     private fun Uri.toFileOrNull(): File? {
         if (scheme != "file") return null
         val p = path ?: return null

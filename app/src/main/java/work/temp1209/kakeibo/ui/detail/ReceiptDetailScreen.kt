@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +68,7 @@ fun ReceiptDetailScreen(
     onBack: () -> Unit,
     onOpenReview: () -> Unit,
     onDeleteReceipt: suspend (String, deleteReason: String) -> Unit,
+    onSwitchEvidenceFailedToManual: suspend (String) -> Result<Unit>,
 ) {
     var loading by remember(receiptId) { mutableStateOf(true) }
     var receipt by remember(receiptId) { mutableStateOf<ReceiptEntity?>(null) }
@@ -341,6 +343,25 @@ fun ReceiptDetailScreen(
                                     },
                                 ),
                         )
+
+                        val kindLabel =
+                            when (r.inputKind) {
+                                "MANUAL_NO_RECEIPT" -> "手入力"
+                                "EVIDENCE_IMAGE" -> "画像"
+                                else -> null
+                            }
+                        if (kindLabel != null) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                            ) {
+                                Text(
+                                    text = kindLabel,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -354,6 +375,21 @@ fun ReceiptDetailScreen(
                                 Text(it, color = MaterialTheme.colorScheme.onErrorContainer)
                             }
                             Button(onClick = onOpenReview) { Text("修正画面へ") }
+
+                        if (r.analysisStatus == "FAILED" && r.inputKind == "EVIDENCE_IMAGE") {
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        val result = onSwitchEvidenceFailedToManual(receiptId)
+                                        if (result.isSuccess) {
+                                            onOpenReview()
+                                        }
+                                    }
+                                },
+                            ) {
+                                Text("手入力に切り替え")
+                            }
+                        }
                         }
                     }
                 }

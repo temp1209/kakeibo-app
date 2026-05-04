@@ -382,6 +382,9 @@ private fun AppNav(
                     onBack = { navController.popBackStack() },
                     onOpenReview = { navController.navigate(Route.ReceiptReview.create(receiptId)) },
                     onDeleteReceipt = { id, reason -> repo.softDeleteReceipt(id, reason) },
+                    onSwitchEvidenceFailedToManual = { id ->
+                        repo.switchEvidenceFailedToManual(id)
+                    },
                 )
             }
         }
