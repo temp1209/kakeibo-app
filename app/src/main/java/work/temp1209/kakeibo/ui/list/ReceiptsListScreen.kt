@@ -17,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +52,7 @@ fun ReceiptsListScreen(
     onPeriodChange: (String) -> Unit,
     loadReceiptRows: suspend (yearMonth: String) -> List<ReceiptListRow>,
     onOpenReceipt: (String) -> Unit,
+    onOpenAddExpenseSheet: (() -> Unit)? = null,
 ) {
     var rows by remember { mutableStateOf<List<ReceiptListRow>>(emptyList()) }
     val selectedMonth: YearMonth? =
@@ -75,6 +77,17 @@ fun ReceiptsListScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (onOpenAddExpenseSheet != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                FloatingActionButton(onClick = onOpenAddExpenseSheet) {
+                    Text("＋")
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

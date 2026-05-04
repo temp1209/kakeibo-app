@@ -3,8 +3,10 @@ package work.temp1209.kakeibo
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -34,6 +36,7 @@ import work.temp1209.kakeibo.ui.camera.CameraScreen
 import work.temp1209.kakeibo.ui.detail.ReceiptDetailScreen
 import work.temp1209.kakeibo.ui.nav.bottomTabs
 import work.temp1209.kakeibo.ui.nav.Route
+import work.temp1209.kakeibo.ui.add.AddExpenseSheet
 import work.temp1209.kakeibo.ui.permissions.requireCameraPermission
 import work.temp1209.kakeibo.ui.preview.PreviewScreen
 import work.temp1209.kakeibo.ui.theme.KakeiboappTheme
@@ -111,6 +114,20 @@ private fun AppNav(
     var listPeriodKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var listLastMonthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
 
+    var addExpenseSheetOpen by remember { mutableStateOf(false) }
+
+    fun setPreviewInputKind(kind: String) {
+        navController.currentBackStackEntry?.savedStateHandle?.set("previewInputKind", kind)
+    }
+
+    val evidencePickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                setPreviewInputKind("EVIDENCE_IMAGE")
+                navController.navigate(Route.Preview.create(uri))
+            }
+        }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -156,6 +173,24 @@ private fun AppNav(
             }
         },
     ) { inner ->
+        if (addExpenseSheetOpen) {
+            AddExpenseSheet(
+                onDismiss = { addExpenseSheetOpen = false },
+                onPickCamera = {
+                    addExpenseSheetOpen = false
+                    navController.navigate(Route.Camera.value)
+                },
+                onPickManualNoReceipt = {
+                    addExpenseSheetOpen = false
+                    navController.navigate(Route.ManualEntry.value)
+                },
+                onPickEvidenceImage = {
+                    addExpenseSheetOpen = false
+                    evidencePickerLauncher.launch("image/*")
+                },
+            )
+        }
+
         NavHost(
             navController = navController,
             startDestination = Route.Camera.value,
@@ -172,12 +207,14 @@ private fun AppNav(
                                     cameraPreviewSuppressed = true
                                     try {
                                         delay(CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS)
+                                        setPreviewInputKind("RECEIPT_CAMERA")
                                         navController.navigate(Route.Preview.create(uri))
                                     } finally {
                                         cameraPreviewSuppressed = false
                                     }
                                 }
                             },
+                            onOpenAddExpenseSheet = { addExpenseSheetOpen = true },
                         )
                     },
                     onDenied = {
@@ -196,6 +233,11 @@ private fun AppNav(
                 val encodedUri = it.arguments?.getString("imageUri") ?: ""
                 val imageUri = Uri.decode(encodedUri).toUri()
                 var saving by remember(imageUri) { mutableStateOf(false) }
+                val inputKind =
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.get<String>("previewInputKind")
+                        ?: "RECEIPT_CAMERA"
 
                 PreviewScreen(
                     contentPadding = PaddingValues(0.dp),
@@ -209,7 +251,7 @@ private fun AppNav(
 
                 if (saving) {
                     LaunchedEffect(imageUri) {
-                        val receiptId = repo.savePendingReceipt(imageUri)
+                        val receiptId = repo.savePendingReceipt(imageUri, inputKind = inputKind)
                         repo.enqueueAnalysis(receiptId)
                         navController.navigate(Route.Camera.value) {
                             popUpTo(Route.Camera.value) { inclusive = true }
@@ -231,6 +273,14 @@ private fun AppNav(
                     },
                     loadReceiptRows = { ym -> repo.listReceiptRowsForMonth(ym) },
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
+                    onOpenAddExpenseSheet = { addExpenseSheetOpen = true },
+                )
+            }
+
+            composable(Route.ManualEntry.value) {
+                androidx.compose.material3.Text(
+                    modifier = Modifier.padding(16.dp),
+                    text = "手入力（Phase6）: 実装中",
                 )
             }
 

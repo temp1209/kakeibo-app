@@ -11,6 +11,7 @@ sealed class Route(val value: String) {
     data object Analysis : Route("analysis")
     data object Notifications : Route("notifications")
     data object Settings : Route("settings")
+    data object ManualEntry : Route("manual-entry")
     data object ReceiptDetail : Route("receipt/{receiptId}") {
         fun create(receiptId: String) = "receipt/$receiptId"
     }

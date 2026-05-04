@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +58,7 @@ fun CameraScreen(
     /** false のときプレビューを隠しカメラを unbind（タブ切替前など） */
     previewActive: Boolean = true,
     onCaptured: (Uri) -> Unit,
+    onOpenAddExpenseSheet: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -172,6 +174,19 @@ fun CameraScreen(
                         },
                     ),
             )
+        }
+
+        if (onOpenAddExpenseSheet != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                TextButton(onClick = onOpenAddExpenseSheet, enabled = previewActive) {
+                    Text("別の方法で記録")
+                }
+            }
         }
     }
 }
