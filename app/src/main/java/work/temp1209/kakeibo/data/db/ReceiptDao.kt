@@ -44,6 +44,23 @@ interface ReceiptDao {
     )
     suspend fun listReceiptRowsFiltered(yearMonth: String): List<ReceiptListRow>
 
+    /**
+     * 全期間一覧: 購入日時 `receiptDatetime`（レシート読取）の昇順。欠落時は `capturedAt`（写真送信・撮影日時）で並べ替え。
+     */
+    @Query(
+        """
+        SELECT r.*,
+        (SELECT CASE WHEN SUM(CAST(i.lineTotalYen AS REAL)) > 0
+            THEN SUM(CAST(i.lineTotalYen AS REAL) * i.necessityScore) / SUM(CAST(i.lineTotalYen AS REAL))
+            ELSE NULL END
+         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity
+        FROM receipts r
+        WHERE r.deletedAt IS NULL
+        ORDER BY COALESCE(r.receiptDatetime, r.capturedAt) ASC
+        """,
+    )
+    suspend fun listReceiptRowsAllPeriods(): List<ReceiptListRow>
+
     @Query(
         """
         SELECT * FROM receipts

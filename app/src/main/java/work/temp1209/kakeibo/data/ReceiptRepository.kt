@@ -112,7 +112,11 @@ class ReceiptRepository(private val context: Context) {
     }
 
     suspend fun listReceiptRowsForMonth(yearMonth: String) = withContext(Dispatchers.IO) {
-        dao.listReceiptRowsFiltered(yearMonth)
+        if (yearMonth.isEmpty()) {
+            dao.listReceiptRowsAllPeriods()
+        } else {
+            dao.listReceiptRowsFiltered(yearMonth)
+        }
     }
 
     suspend fun getReceiptOrNull(receiptId: String) = withContext(Dispatchers.IO) {
