@@ -178,21 +178,6 @@ private fun AppNav(
                                     }
                                 }
                             },
-                            onOpenList = {
-                                scope.launch {
-                                    cameraPreviewSuppressed = true
-                                    try {
-                                        delay(CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS)
-                                        navController.navigate(Route.List.value) {
-                                            popUpTo(Route.Camera.value) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    } finally {
-                                        cameraPreviewSuppressed = false
-                                    }
-                                }
-                            },
                         )
                     },
                     onDenied = {

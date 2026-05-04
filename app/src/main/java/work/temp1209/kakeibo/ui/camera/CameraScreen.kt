@@ -12,13 +12,18 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -32,8 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -48,7 +57,6 @@ fun CameraScreen(
     /** false のときプレビューを隠しカメラを unbind（タブ切替前など） */
     previewActive: Boolean = true,
     onCaptured: (Uri) -> Unit,
-    onOpenList: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -56,6 +64,7 @@ fun CameraScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var bindAttempt by remember { mutableStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val shutterInteraction = remember { MutableInteractionSource() }
 
     val previewView = remember { PreviewView(context) }
     val imageCapture = remember {
@@ -113,10 +122,8 @@ fun CameraScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(contentPadding)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(contentPadding),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         SnackbarHost(hostState = snackbarHostState)
 
@@ -125,37 +132,46 @@ fun CameraScreen(
                 factory = { previewView },
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxSize(),
+                    .fillMaxWidth(),
             )
         } else {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface),
             )
         }
 
-        Button(
-            onClick = { onOpenList() },
-            enabled = previewActive,
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 28.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Text("一覧を開く")
-        }
-
-        Button(
-            onClick = {
-                errorMessage = null
-                captureToInternalFile(
-                    context = context,
-                    imageCapture = imageCapture,
-                    onSuccess = onCaptured,
-                    onError = { errorMessage = it },
-                )
-            },
-            enabled = previewActive,
-        ) {
-            Text("撮影")
+            val ringColor = Color(0xFF1A1A1A).copy(alpha = 0.22f)
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color.White, CircleShape)
+                    .border(width = 4.dp, color = ringColor, shape = CircleShape)
+                    .semantics { contentDescription = "撮影" }
+                    .clickable(
+                        interactionSource = shutterInteraction,
+                        indication = null,
+                        enabled = previewActive,
+                        onClick = {
+                            errorMessage = null
+                            captureToInternalFile(
+                                context = context,
+                                imageCapture = imageCapture,
+                                onSuccess = onCaptured,
+                                onError = { errorMessage = it },
+                            )
+                        },
+                    ),
+            )
         }
     }
 }
@@ -257,4 +273,3 @@ private fun readExifRotationDegrees(file: File): Int {
         else -> 0
     }
 }
-
