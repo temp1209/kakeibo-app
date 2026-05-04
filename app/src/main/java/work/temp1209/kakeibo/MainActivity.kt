@@ -42,6 +42,8 @@ import work.temp1209.kakeibo.ui.list.ReceiptsListScreen
 import work.temp1209.kakeibo.ui.settings.SettingsScreen
 import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
+import work.temp1209.kakeibo.ui.analysis.AnalysisScreen
+import work.temp1209.kakeibo.ui.review.ReceiptReviewScreen
 
 class MainActivity : ComponentActivity() {
     private val deepLinkReceiptId = mutableStateOf<String?>(null)
@@ -173,23 +175,40 @@ private fun AppNav(
             composable(Route.List.value) {
                 ReceiptsListScreen(
                     contentPadding = PaddingValues(0.dp),
-                    loadReceipts = { repo.listReceipts() },
+                    loadReceiptRows = { ym -> repo.listReceiptRowsForMonth(ym) },
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
                 )
             }
 
             composable(Route.Analysis.value) {
-                androidx.compose.material3.Text(modifier = Modifier.padding(16.dp), text = "分析 (TODO)")
+                AnalysisScreen(contentPadding = PaddingValues(0.dp), repo = repo)
             }
             composable(Route.Notifications.value) {
                 NotificationsScreen(
                     contentPadding = PaddingValues(0.dp),
                     repo = repo,
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
+                    onOpenReceiptReview = { id -> navController.navigate(Route.ReceiptReview.create(id)) },
                 )
             }
             composable(Route.Settings.value) {
                 SettingsScreen(contentPadding = PaddingValues(0.dp))
+            }
+
+            composable(
+                route = Route.ReceiptReview.value,
+                arguments = listOf(navArgument("receiptId") { type = NavType.StringType }),
+            ) {
+                val receiptId = it.arguments?.getString("receiptId") ?: return@composable
+                ReceiptReviewScreen(
+                    contentPadding = PaddingValues(0.dp),
+                    receiptId = receiptId,
+                    repo = repo,
+                    onBack = { navController.popBackStack() },
+                    onSaved = {
+                        navController.popBackStack(Route.List.value, inclusive = false)
+                    },
+                )
             }
 
             composable(
@@ -200,9 +219,13 @@ private fun AppNav(
                 ReceiptDetailScreen(
                     contentPadding = PaddingValues(0.dp),
                     receiptId = receiptId,
+                    loadReceipt = { id -> repo.getReceiptOrNull(id) },
+                    loadVisibleItems = { id -> repo.listVisibleReceiptItems(id) },
                     loadImage = { id -> repo.getReceiptImage(id) },
                     loadGeminiJson = { id -> repo.getLatestGeminiJsonOrNull(id) },
                     onBack = { navController.popBackStack() },
+                    onOpenReview = { navController.navigate(Route.ReceiptReview.create(receiptId)) },
+                    onDeleteReceipt = { id, reason -> repo.softDeleteReceipt(id, reason) },
                 )
             }
         }

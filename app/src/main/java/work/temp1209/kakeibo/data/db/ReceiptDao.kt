@@ -26,17 +26,58 @@ interface ReceiptDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertQueue(entry: AnalysisQueueEntity)
 
-    @Query("SELECT * FROM receipts ORDER BY COALESCE(receiptDatetime, capturedAt) DESC")
+    @Query("SELECT * FROM receipts WHERE deletedAt IS NULL ORDER BY COALESCE(receiptDatetime, capturedAt) DESC")
     suspend fun listReceipts(): List<ReceiptEntity>
 
-    @Query("SELECT * FROM receipts WHERE analysisStatus IN ('DONE','FAILED','NEEDS_REVIEW') ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit")
+    @Query(
+        """
+        SELECT r.*,
+        (SELECT CASE WHEN SUM(CAST(i.lineTotalYen AS REAL)) > 0
+            THEN SUM(CAST(i.lineTotalYen AS REAL) * i.necessityScore) / SUM(CAST(i.lineTotalYen AS REAL))
+            ELSE NULL END
+         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0) AS weightedNecessity
+        FROM receipts r
+        WHERE r.deletedAt IS NULL
+        AND (:yearMonth = '' OR substr(COALESCE(r.receiptDatetime, r.capturedAt), 1, 7) = :yearMonth)
+        ORDER BY COALESCE(r.receiptDatetime, r.capturedAt) DESC
+        """,
+    )
+    suspend fun listReceiptRowsFiltered(yearMonth: String): List<ReceiptListRow>
+
+    @Query(
+        """
+        SELECT * FROM receipts
+        WHERE deletedAt IS NULL AND analysisStatus IN ('DONE','FAILED','NEEDS_REVIEW')
+        ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit
+        """,
+    )
     suspend fun listRecentAnalyzed(limit: Int): List<ReceiptEntity>
 
-    @Query("SELECT * FROM receipts WHERE needsReview = 1 ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit")
+    @Query(
+        """
+        SELECT * FROM receipts
+        WHERE deletedAt IS NULL AND needsReview = 1
+        ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit
+        """,
+    )
     suspend fun listNeedsReview(limit: Int): List<ReceiptEntity>
 
     @Query("SELECT * FROM receipts WHERE receiptId = :receiptId LIMIT 1")
     suspend fun getReceiptOrNull(receiptId: String): ReceiptEntity?
+
+    @Query("SELECT * FROM receipt_items WHERE receiptId = :receiptId ORDER BY lineIndex ASC")
+    suspend fun listReceiptItems(receiptId: String): List<ReceiptItemEntity>
+
+    @Query(
+        """
+        SELECT i.* FROM receipt_items i
+        INNER JOIN receipts r ON r.receiptId = i.receiptId
+        WHERE r.deletedAt IS NULL
+        AND substr(COALESCE(r.receiptDatetime, r.capturedAt), 1, 7) = :yearMonth
+        AND i.isAdjustment = 0
+        """,
+    )
+    suspend fun listNonAdjustmentItemsInMonth(yearMonth: String): List<ReceiptItemEntity>
 
     @Query("SELECT * FROM receipt_images WHERE receiptId = :receiptId LIMIT 1")
     suspend fun getReceiptImage(receiptId: String): ReceiptImageEntity?

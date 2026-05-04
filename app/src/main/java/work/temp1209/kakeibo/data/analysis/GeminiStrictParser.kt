@@ -2,6 +2,7 @@ package work.temp1209.kakeibo.data.analysis
 
 import org.json.JSONArray
 import org.json.JSONObject
+import work.temp1209.kakeibo.data.domain.CategoryCatalog
 import work.temp1209.kakeibo.data.analysis.model.GeminiReceiptResponse
 import work.temp1209.kakeibo.data.analysis.model.ReceiptHeader
 import work.temp1209.kakeibo.data.analysis.model.ReceiptItem
@@ -67,6 +68,13 @@ object GeminiStrictParser {
 
         val invalidLineIndexCount = response.items.count { it.lineIndex < 0 }
         if (invalidLineIndexCount > 0) reasons += "invalid lineIndex: $invalidLineIndexCount"
+
+        val invalidCategoryCount = response.items.count {
+            it.categoryMajor.isBlank() ||
+                it.categoryMinor.isBlank() ||
+                !CategoryCatalog.isValidPair(it.categoryMajor, it.categoryMinor)
+        }
+        if (invalidCategoryCount > 0) reasons += "invalid category pairs: $invalidCategoryCount"
 
         val needsReview = reasons.isNotEmpty()
         return ReviewFlags(needsReview = needsReview, reasons = reasons)

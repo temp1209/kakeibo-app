@@ -31,6 +31,7 @@ fun NotificationsScreen(
     contentPadding: PaddingValues,
     repo: ReceiptRepository,
     onOpenReceipt: (String) -> Unit,
+    onOpenReceiptReview: (String) -> Unit = onOpenReceipt,
 ) {
     var queueCount by remember { mutableStateOf(0) }
     var latestError by remember { mutableStateOf<String?>(null) }
@@ -67,7 +68,7 @@ fun NotificationsScreen(
                 items(needsReview, key = { it.receiptId }) { r ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        onClick = { onOpenReceipt(r.receiptId) },
+                        onClick = { onOpenReceiptReview(r.receiptId) },
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text("status: ${r.analysisStatus} / error: ${r.analysisErrorMessage ?: "-"}")

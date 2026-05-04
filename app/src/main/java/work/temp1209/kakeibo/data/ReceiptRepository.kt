@@ -15,6 +15,10 @@ import work.temp1209.kakeibo.data.analysis.AnalysisWorker
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
+import work.temp1209.kakeibo.data.db.ReceiptItemEntity
+import work.temp1209.kakeibo.data.db.ReceiptListRow
+import work.temp1209.kakeibo.data.domain.NecessityUtils
+import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -106,6 +110,110 @@ class ReceiptRepository(private val context: Context) {
     suspend fun listReceipts() = withContext(Dispatchers.IO) {
         dao.listReceipts()
     }
+
+    suspend fun listReceiptRowsForMonth(yearMonth: String) = withContext(Dispatchers.IO) {
+        dao.listReceiptRowsFiltered(yearMonth)
+    }
+
+    suspend fun getReceiptOrNull(receiptId: String) = withContext(Dispatchers.IO) {
+        dao.getReceiptOrNull(receiptId)
+    }
+
+    suspend fun listReceiptItems(receiptId: String) = withContext(Dispatchers.IO) {
+        dao.listReceiptItems(receiptId)
+    }
+
+    suspend fun listVisibleReceiptItems(receiptId: String) = withContext(Dispatchers.IO) {
+        dao.listReceiptItems(receiptId).filter { it.isAdjustment == 0 }
+    }
+
+    suspend fun listNonAdjustmentItemsInMonth(yearMonth: String) = withContext(Dispatchers.IO) {
+        dao.listNonAdjustmentItemsInMonth(yearMonth)
+    }
+
+    data class MonthAnalysisSummary(
+        val yearMonth: String,
+        val mandatoryYen: Long,
+        val discretionaryYen: Long,
+        val mandatoryLineCount: Int,
+        val discretionaryLineCount: Int,
+    )
+
+    suspend fun monthAnalysisSummary(yearMonth: String): MonthAnalysisSummary = withContext(Dispatchers.IO) {
+        val items = dao.listNonAdjustmentItemsInMonth(yearMonth)
+        var mandatoryYen = 0L
+        var discretionaryYen = 0L
+        var mandatoryLineCount = 0
+        var discretionaryLineCount = 0
+        for (it in items) {
+            if (it.necessityScore >= 50) {
+                mandatoryYen += it.lineTotalYen
+                mandatoryLineCount++
+            } else {
+                discretionaryYen += it.lineTotalYen
+                discretionaryLineCount++
+            }
+        }
+        MonthAnalysisSummary(
+            yearMonth = yearMonth,
+            mandatoryYen = mandatoryYen,
+            discretionaryYen = discretionaryYen,
+            mandatoryLineCount = mandatoryLineCount,
+            discretionaryLineCount = discretionaryLineCount,
+        )
+    }
+
+    fun sortWasteCandidates(items: List<ReceiptItemEntity>, byAmount: Boolean): List<ReceiptItemEntity> {
+        return if (byAmount) {
+            items.sortedWith(compareByDescending<ReceiptItemEntity> { it.lineTotalYen }.thenByDescending { it.necessityScore })
+        } else {
+            items.sortedWith(
+                compareByDescending<ReceiptItemEntity> { (100 - it.necessityScore) * it.lineTotalYen }
+                    .thenByDescending { it.lineTotalYen },
+            )
+        }
+    }
+
+    suspend fun softDeleteReceipt(receiptId: String, deleteReason: String) = withContext(Dispatchers.IO) {
+        val now = Instant.now().toString()
+        val existing = dao.getReceiptOrNull(receiptId) ?: return@withContext
+        dao.upsertReceipt(
+            existing.copy(
+                deletedAt = now,
+                deleteReason = deleteReason,
+                updatedAt = now,
+            ),
+        )
+    }
+
+    /**
+     * 修正完了: 必須充足時に needsReview 解除し DONE へ（要件 Phase3）。
+     */
+    suspend fun applyReceiptReview(
+        receipt: ReceiptEntity,
+        items: List<ReceiptItemEntity>,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        if (!ReceiptRequiredFields.isSatisfiedForReviewComplete(receipt, items)) {
+            return@withContext Result.failure(IllegalStateException("必須項目が不足しています"))
+        }
+        val now = Instant.now().toString()
+        val cleared = receipt.copy(
+            needsReview = 0,
+            analysisStatus = when (receipt.analysisStatus) {
+                "NEEDS_REVIEW", "FAILED" -> "DONE"
+                else -> receipt.analysisStatus
+            },
+            analysisErrorMessage = null,
+            updatedAt = now,
+        )
+        dao.upsertReceipt(cleared)
+        dao.upsertReceiptItems(items)
+        Result.success(Unit)
+    }
+
+    /** 一覧行の加重平均（DAO サブクエリと一致させるための再計算用・テスト等） */
+    fun weightedNecessityForItems(items: List<ReceiptItemEntity>): Double? =
+        NecessityUtils.weightedAverageScore(items)
 
     suspend fun getReceiptImage(receiptId: String) = withContext(Dispatchers.IO) {
         dao.getReceiptImage(receiptId)
