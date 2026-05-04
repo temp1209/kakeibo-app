@@ -27,7 +27,10 @@ import java.util.UUID
 class ReceiptRepository(private val context: Context) {
     private val dao = AppDatabase.get(context).receiptDao()
 
-    suspend fun savePendingReceipt(imageUri: Uri): String = withContext(Dispatchers.IO) {
+    suspend fun savePendingReceipt(
+        imageUri: Uri,
+        inputKind: String = "RECEIPT_CAMERA",
+    ): String = withContext(Dispatchers.IO) {
         val now = Instant.now().toString()
         val receiptId = UUID.randomUUID().toString()
         Log.d(TAG, "savePendingReceipt start receiptId=$receiptId uri=${imageUri.scheme}")
@@ -45,6 +48,7 @@ class ReceiptRepository(private val context: Context) {
         dao.upsertReceipt(
             ReceiptEntity(
                 receiptId = receiptId,
+                inputKind = inputKind,
                 capturedAt = now,
                 receiptDatetime = now, // 暫定: Phase1では capturedAt をコピー（後でGemini/手入力で上書き）
                 analysisStatus = "PENDING",
@@ -79,6 +83,93 @@ class ReceiptRepository(private val context: Context) {
 
         Log.d(TAG, "savePendingReceipt done receiptId=$receiptId bytes=$bytes w=$w h=$h")
         receiptId
+    }
+
+    data class ManualReceiptItemInput(
+        val itemName: String,
+        val quantity: Int,
+        /** 行合計（数量込みの合計金額） */
+        val lineTotalYen: Long,
+        val categoryMajor: String,
+        val categoryMinor: String,
+        val necessityScore: Int,
+    )
+
+    data class ManualReceiptInput(
+        val receiptDatetime: String,
+        val merchantName: String,
+        val totalAmountYen: Long,
+        val paymentMethod: String,
+        val paymentServiceName: String?,
+        val items: List<ManualReceiptItemInput>,
+    )
+
+    /**
+     * Phase6: レシートなし手入力。
+     * - gemini_results を作らない
+     * - analysis_queue に入れない
+     * - 保存後も analysisStatus=DONE / needsReview=0
+     */
+    suspend fun saveManualNoReceipt(input: ManualReceiptInput): Result<String> = withContext(Dispatchers.IO) {
+        if (input.items.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("明細は1件以上必要です"))
+        }
+        if (input.totalAmountYen < 0) {
+            return@withContext Result.failure(IllegalArgumentException("合計金額が不正です"))
+        }
+
+        val sum = input.items.sumOf { it.lineTotalYen }
+        if (sum != input.totalAmountYen) {
+            return@withContext Result.failure(
+                IllegalArgumentException("明細合計と合計金額が一致しません（明細=$sum 合計=${input.totalAmountYen}）"),
+            )
+        }
+
+        val now = Instant.now().toString()
+        val receiptId = UUID.randomUUID().toString()
+        val receipt =
+            ReceiptEntity(
+                receiptId = receiptId,
+                inputKind = "MANUAL_NO_RECEIPT",
+                capturedAt = now, // 要件: 保存ボタン押下時の Instant
+                receiptDatetime = input.receiptDatetime,
+                analysisStatus = "DONE",
+                merchantName = input.merchantName,
+                totalAmountYen = input.totalAmountYen,
+                paymentMethod = input.paymentMethod,
+                paymentServiceName = input.paymentServiceName,
+                analysisStartedAt = null,
+                analysisCompletedAt = null,
+                analysisErrorMessage = null,
+                needsReview = 0,
+                itemsSubtotalYen = sum,
+                adjustmentYen = 0,
+                deletedAt = null,
+                deleteReason = null,
+                backupRevision = 0,
+                createdAt = now,
+                updatedAt = now,
+            )
+
+        val items =
+            input.items.mapIndexed { idx, it ->
+                ReceiptItemEntity(
+                    itemId = UUID.randomUUID().toString(),
+                    receiptId = receiptId,
+                    lineIndex = idx,
+                    itemName = it.itemName,
+                    quantity = it.quantity,
+                    lineTotalYen = it.lineTotalYen,
+                    categoryMajor = it.categoryMajor,
+                    categoryMinor = it.categoryMinor,
+                    necessityScore = it.necessityScore,
+                    confidence = 1.0,
+                    isAdjustment = 0,
+                )
+            }
+
+        dao.replaceReceiptAndItems(receipt, items)
+        Result.success(receiptId)
     }
 
     suspend fun enqueueAnalysis(receiptId: String): Boolean = withContext(Dispatchers.IO) {
