@@ -38,15 +38,24 @@ import work.temp1209.kakeibo.ui.format.formatIsoInstant
 import work.temp1209.kakeibo.ui.format.formatYen
 import java.time.YearMonth
 
+/** 全期間表示（DB には空文字で渡す。画面状態ではこの定数を使う） */
+const val RECEIPTS_LIST_PERIOD_ALL = "ALL"
+
 @Composable
 fun ReceiptsListScreen(
     contentPadding: PaddingValues,
+    /** [RECEIPTS_LIST_PERIOD_ALL] または yyyy-MM */
+    periodKey: String,
+    /** 全期間から「月別」に戻すときの年月（yyyy-MM） */
+    lastMonthKey: String,
+    onPeriodChange: (String) -> Unit,
     loadReceiptRows: suspend (yearMonth: String) -> List<ReceiptListRow>,
     onOpenReceipt: (String) -> Unit,
 ) {
     var rows by remember { mutableStateOf<List<ReceiptListRow>>(emptyList()) }
-    var selectedMonth by remember { mutableStateOf<YearMonth?>(YearMonth.now()) }
-    var loading by remember(selectedMonth) { mutableStateOf(true) }
+    val selectedMonth: YearMonth? =
+        if (periodKey == RECEIPTS_LIST_PERIOD_ALL) null else runCatching { YearMonth.parse(periodKey) }.getOrNull()
+    var loading by remember(periodKey) { mutableStateOf(true) }
 
     val yearMonthArg = selectedMonth?.toString().orEmpty()
 
@@ -71,16 +80,30 @@ fun ReceiptsListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilterChip(
-                selected = selectedMonth == null,
-                onClick = { selectedMonth = null },
-                label = { Text("全期間") },
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilterChip(
+                    selected = periodKey != RECEIPTS_LIST_PERIOD_ALL,
+                    onClick = {
+                        val key = runCatching { YearMonth.parse(lastMonthKey).toString() }
+                            .getOrElse { YearMonth.now().toString() }
+                        onPeriodChange(key)
+                    },
+                    label = { Text("月別") },
+                )
+                FilterChip(
+                    selected = periodKey == RECEIPTS_LIST_PERIOD_ALL,
+                    onClick = { onPeriodChange(RECEIPTS_LIST_PERIOD_ALL) },
+                    label = { Text("全期間") },
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = {
-                        val m = selectedMonth ?: YearMonth.now()
-                        selectedMonth = m.minusMonths(1)
+                        val m = selectedMonth ?: return@IconButton
+                        onPeriodChange(m.minusMonths(1).toString())
                     },
                     enabled = selectedMonth != null,
                 ) {
@@ -96,10 +119,10 @@ fun ReceiptsListScreen(
                         val m = selectedMonth ?: return@IconButton
                         val next = m.plusMonths(1)
                         if (!next.isAfter(YearMonth.now())) {
-                            selectedMonth = next
+                            onPeriodChange(next.toString())
                         }
                     },
-                    enabled = selectedMonth != null && selectedMonth!!.isBefore(YearMonth.now()),
+                    enabled = selectedMonth != null && selectedMonth.isBefore(YearMonth.now()),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "翌月")
                 }

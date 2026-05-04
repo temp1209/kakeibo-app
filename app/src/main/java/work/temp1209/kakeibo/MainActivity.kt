@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -38,6 +39,7 @@ import work.temp1209.kakeibo.ui.preview.PreviewScreen
 import work.temp1209.kakeibo.ui.theme.KakeiboappTheme
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.ReceiptRepository
+import work.temp1209.kakeibo.ui.list.RECEIPTS_LIST_PERIOD_ALL
 import work.temp1209.kakeibo.ui.list.ReceiptsListScreen
 import work.temp1209.kakeibo.ui.settings.SettingsScreen
 import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
@@ -47,6 +49,7 @@ import work.temp1209.kakeibo.ui.review.ReceiptReviewScreen
 import work.temp1209.kakeibo.data.work.DriveBackupScheduler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.YearMonth
 
 /** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
 private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
@@ -104,6 +107,9 @@ private fun AppNav(
     val currentDestination = navBackStackEntry?.destination
     val scope = rememberCoroutineScope()
     var cameraPreviewSuppressed by remember { mutableStateOf(false) }
+
+    var listPeriodKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
+    var listLastMonthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -230,6 +236,14 @@ private fun AppNav(
             composable(Route.List.value) {
                 ReceiptsListScreen(
                     contentPadding = PaddingValues(0.dp),
+                    periodKey = listPeriodKey,
+                    lastMonthKey = listLastMonthKey,
+                    onPeriodChange = { key ->
+                        listPeriodKey = key
+                        if (key != RECEIPTS_LIST_PERIOD_ALL) {
+                            listLastMonthKey = key
+                        }
+                    },
                     loadReceiptRows = { ym -> repo.listReceiptRowsForMonth(ym) },
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
                 )
