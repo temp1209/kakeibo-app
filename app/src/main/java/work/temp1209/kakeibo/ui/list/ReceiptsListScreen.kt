@@ -1,6 +1,7 @@
 package work.temp1209.kakeibo.ui.list
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,12 +36,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.db.ReceiptListRow
 import work.temp1209.kakeibo.data.domain.NecessityUtils
+import work.temp1209.kakeibo.ui.common.TabScreenTitle
 import work.temp1209.kakeibo.ui.format.formatIsoInstant
 import work.temp1209.kakeibo.ui.format.formatYen
 import java.time.YearMonth
 
 /** 全期間表示（DB には空文字で渡す。画面状態ではこの定数を使う） */
 const val RECEIPTS_LIST_PERIOD_ALL = "ALL"
+
+/** 右下 FAB（56dp 相当）＋マージンで一覧末尾が隠れないように確保する余白 */
+private val ReceiptsListFabBottomClearance = 88.dp
 
 @Composable
 fun ReceiptsListScreen(
@@ -70,29 +75,27 @@ fun ReceiptsListScreen(
         }
     }
 
-    Column(
+    val fabBottomClearance =
+        if (onOpenAddExpenseSheet != null) ReceiptsListFabBottomClearance else 0.dp
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(contentPadding)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(contentPadding),
     ) {
-        if (onOpenAddExpenseSheet != null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            TabScreenTitle("一覧", modifier = Modifier.fillMaxWidth())
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                FloatingActionButton(onClick = onOpenAddExpenseSheet) {
-                    Text("＋")
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -142,93 +145,129 @@ fun ReceiptsListScreen(
             }
         }
 
-        if (loading) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                CircularProgressIndicator()
-                Text("読み込み中…", modifier = Modifier.padding(top = 12.dp))
-            }
-            return@Column
-        }
+            when {
+                loading -> {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(bottom = fabBottomClearance),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator()
+                        Text("読み込み中…", modifier = Modifier.padding(top = 12.dp))
+                    }
+                }
 
-        if (rows.isEmpty()) {
-            Text("該当するレシートはありません。")
-            return@Column
-        }
+                rows.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(bottom = fabBottomClearance),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("該当するレシートはありません。")
+                    }
+                }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(rows, key = { it.receipt.receiptId }) { row ->
-                val r = row.receipt
-                val badge = NecessityUtils.badgeLabel(row.weightedNecessity)
-                val mandatoryHeavy = (row.weightedNecessity ?: 0.0) >= 50.0
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    onClick = { onOpenReceipt(r.receiptId) },
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = formatIsoInstant(r.receiptDatetime ?: r.capturedAt),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (mandatoryHeavy) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.tertiaryContainer
-                                },
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentPadding = PaddingValues(bottom = fabBottomClearance),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(rows, key = { it.receipt.receiptId }) { row ->
+                            val r = row.receipt
+                            val badge = NecessityUtils.badgeLabel(row.weightedNecessity)
+                            val mandatoryHeavy = (row.weightedNecessity ?: 0.0) >= 50.0
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                onClick = { onOpenReceipt(r.receiptId) },
                             ) {
-                                Text(
-                                    text = badge,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = formatIsoInstant(r.receiptDatetime ?: r.capturedAt),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = if (mandatoryHeavy) {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.tertiaryContainer
+                                            },
+                                        ) {
+                                            Text(
+                                                text = badge,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                style = MaterialTheme.typography.labelMedium,
+                                            )
+                                        }
+                                    }
+                                    val kindLabel =
+                                        when (r.inputKind) {
+                                            "MANUAL_NO_RECEIPT" -> "手入力"
+                                            "EVIDENCE_IMAGE" -> "画像"
+                                            else -> null
+                                        }
+                                    if (kindLabel != null) {
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = MaterialTheme.colorScheme.surface,
+                                        ) {
+                                            Text(
+                                                text = kindLabel,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = r.merchantName?.ifBlank { "（店名なし）" } ?: "（店名なし）",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                    Text(
+                                        text = "合計 ${formatYen(r.totalAmountYen)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    if (r.needsReview == 1) {
+                                        Text(
+                                            text = "要確認",
+                                            color = MaterialTheme.colorScheme.error,
+                                            style = MaterialTheme.typography.labelLarge,
+                                        )
+                                    }
+                                }
                             }
-                        }
-                        val kindLabel =
-                            when (r.inputKind) {
-                                "MANUAL_NO_RECEIPT" -> "手入力"
-                                "EVIDENCE_IMAGE" -> "画像"
-                                else -> null
-                            }
-                        if (kindLabel != null) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                            ) {
-                                Text(
-                                    text = kindLabel,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
-                        }
-                        Text(
-                            text = r.merchantName?.ifBlank { "（店名なし）" } ?: "（店名なし）",
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Text(
-                            text = "合計 ${formatYen(r.totalAmountYen)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        if (r.needsReview == 1) {
-                            Text(
-                                text = "要確認",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelLarge,
-                            )
                         }
                     }
                 }
+            }
+        }
+
+        if (onOpenAddExpenseSheet != null) {
+            FloatingActionButton(
+                onClick = onOpenAddExpenseSheet,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Text("＋")
             }
         }
     }

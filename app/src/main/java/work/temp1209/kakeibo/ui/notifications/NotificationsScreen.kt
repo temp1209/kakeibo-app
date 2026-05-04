@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import work.temp1209.kakeibo.ui.common.TabScreenTitle
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 
@@ -41,7 +42,10 @@ fun NotificationsScreen(
         queueCount = repo.queueInFlightCount()
         latestError = repo.latestQueueErrorOrNull()
         needsReview = repo.listNeedsReview(limit = 30)
-        recent = repo.listRecentAnalyzed(limit = 30)
+        // 「要確認」と「最近」は同一 LazyColumn 内の別セクションのため、receiptId が重複すると items(key) が衝突する。
+        // 要確認に載るものは「最近」から除外する（一覧の二重表示も避ける）。
+        val nrIds = needsReview.map { it.receiptId }.toSet()
+        recent = repo.listRecentAnalyzed(limit = 60).filter { it.receiptId !in nrIds }.take(30)
     }
 
     LazyColumn(
@@ -51,6 +55,9 @@ fun NotificationsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item {
+            TabScreenTitle("通知")
+        }
         item {
             Text("解析キュー: ${queueCount}件")
             Text("最終エラー: ${latestError ?: "なし"}")
@@ -63,7 +70,7 @@ fun NotificationsScreen(
         if (needsReview.isEmpty()) {
             item { Text("該当するレシートはありません。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
-            items(needsReview, key = { it.receiptId }) { r ->
+            items(needsReview, key = { "needsReview:${it.receiptId}" }) { r ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     onClick = { onOpenReceiptReview(r.receiptId) },
@@ -85,7 +92,7 @@ fun NotificationsScreen(
         if (recent.isEmpty()) {
             item { Text("まだ解析結果がありません。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
-            items(recent, key = { it.receiptId }) { r ->
+            items(recent, key = { "recent:${it.receiptId}" }) { r ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     onClick = { onOpenReceipt(r.receiptId) },

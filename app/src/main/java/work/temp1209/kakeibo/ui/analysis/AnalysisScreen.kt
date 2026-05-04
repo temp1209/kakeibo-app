@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
+import work.temp1209.kakeibo.ui.common.TabScreenTitle
 import work.temp1209.kakeibo.ui.format.formatYen
 import java.time.YearMonth
 
@@ -66,7 +67,7 @@ fun AnalysisScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Text("分析", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            TabScreenTitle("分析")
         }
 
         item {

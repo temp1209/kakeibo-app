@@ -40,6 +40,7 @@ import work.temp1209.kakeibo.data.drive.GoogleSignInHelper
 import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.DriveBackupPrefs
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.ui.common.TabScreenTitle
 
 @Composable
 fun SettingsScreen(
@@ -108,6 +109,7 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        TabScreenTitle("設定")
         SnackbarHost(hostState = snackbarHostState)
 
         Text("Gemini")

@@ -7,4 +7,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- アダプティブアイコン背景（ランチャーマスク時の外周。前景PNGのオレンジに合わせる） -->
+    <color name="ic_launcher_background">#FFFF7A3D</color>
 </resources>
