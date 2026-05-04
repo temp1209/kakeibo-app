@@ -165,7 +165,7 @@ class AnalysisWorker(
                 )
                 if (shouldSendAnalysisOsNotification(existing)) {
                     if (flags2.needsReview) {
-                        AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+                        AnalysisNotifications.notifyNeedsReview(applicationContext, entry.receiptId)
                     } else {
                         AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
                     }
