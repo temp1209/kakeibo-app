@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import org.json.JSONObject
 import work.temp1209.kakeibo.data.analysis.model.ReceiptItem
 import work.temp1209.kakeibo.data.db.GeminiResultEntity
+import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
@@ -162,10 +163,12 @@ class AnalysisWorker(
                     lastError = null,
                     attemptCount = attempt,
                 )
-                if (flags2.needsReview) {
-                    AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
-                } else {
-                    AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
+                if (shouldSendAnalysisOsNotification(existing)) {
+                    if (flags2.needsReview) {
+                        AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+                    } else {
+                        AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
+                    }
                 }
                 Log.d(TAG, "done receiptId=${entry.receiptId} status=$receiptStatus subtotal=$subtotal adjustment=$adjustment")
             } catch (e: Exception) {
@@ -191,7 +194,9 @@ class AnalysisWorker(
                         )
                     }
                     dao.finishQueue(entry.queueId, status = "FAILED", finishedAt = finishedAt, lastError = msg, attemptCount = attempt)
-                    AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+                    if (shouldSendAnalysisOsNotification(existing)) {
+                        AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+                    }
                 }
             }
         }
@@ -214,6 +219,13 @@ class AnalysisWorker(
     }
 
     companion object {
+        /**
+         * 要件 P6-7: `MANUAL_NO_RECEIPT` では解析完了の OS 通知を出さない（キュー非投入が前提だが、万一の保険）。
+         * `RECEIPT_CAMERA` / `EVIDENCE_IMAGE` は従来どおり。
+         */
+        private fun shouldSendAnalysisOsNotification(receipt: ReceiptEntity?): Boolean =
+            receipt?.inputKind != "MANUAL_NO_RECEIPT"
+
         private const val TAG = "AnalysisWorker"
         private const val PROMPT = """
 あなたは家計簿アプリのOCR/分類エンジンです。レシート画像から情報を抽出し、必ず「指定スキーマの厳格JSONのみ」を返してください。
