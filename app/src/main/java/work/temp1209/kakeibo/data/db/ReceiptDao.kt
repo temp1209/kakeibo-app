@@ -35,7 +35,12 @@ interface ReceiptDao {
         (SELECT CASE WHEN SUM(CAST(i.lineTotalYen AS REAL)) > 0
             THEN SUM(CAST(i.lineTotalYen AS REAL) * i.necessityScore) / SUM(CAST(i.lineTotalYen AS REAL))
             ELSE NULL END
-         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity
+         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity,
+        (SELECT i2.itemName FROM receipt_items i2
+         WHERE i2.receiptId = r.receiptId AND i2.isAdjustment = 0
+         ORDER BY i2.lineIndex ASC LIMIT 1) AS firstItemName,
+        (SELECT COUNT(*) FROM receipt_items i3
+         WHERE i3.receiptId = r.receiptId AND i3.isAdjustment = 0) AS nonAdjustmentItemCount
         FROM receipts r
         WHERE r.deletedAt IS NULL
         AND (:yearMonth = '' OR substr(COALESCE(r.receiptDatetime, r.capturedAt), 1, 7) = :yearMonth)
@@ -43,6 +48,28 @@ interface ReceiptDao {
         """,
     )
     suspend fun listReceiptRowsFiltered(yearMonth: String): List<ReceiptListRow>
+
+    /**
+     * 全期間一覧: 購入日時 `receiptDatetime`（レシート読取）の新しい順。欠落時は `capturedAt`（写真送信・撮影日時）で並べ替え。
+     */
+    @Query(
+        """
+        SELECT r.*,
+        (SELECT CASE WHEN SUM(CAST(i.lineTotalYen AS REAL)) > 0
+            THEN SUM(CAST(i.lineTotalYen AS REAL) * i.necessityScore) / SUM(CAST(i.lineTotalYen AS REAL))
+            ELSE NULL END
+         FROM receipt_items i WHERE i.receiptId = r.receiptId AND i.isAdjustment = 0 AND i.lineTotalYen > 0) AS weightedNecessity,
+        (SELECT i2.itemName FROM receipt_items i2
+         WHERE i2.receiptId = r.receiptId AND i2.isAdjustment = 0
+         ORDER BY i2.lineIndex ASC LIMIT 1) AS firstItemName,
+        (SELECT COUNT(*) FROM receipt_items i3
+         WHERE i3.receiptId = r.receiptId AND i3.isAdjustment = 0) AS nonAdjustmentItemCount
+        FROM receipts r
+        WHERE r.deletedAt IS NULL
+        ORDER BY COALESCE(r.receiptDatetime, r.capturedAt) DESC
+        """,
+    )
+    suspend fun listReceiptRowsAllPeriods(): List<ReceiptListRow>
 
     @Query(
         """
@@ -122,6 +149,12 @@ interface ReceiptDao {
 
     @Query("UPDATE receipt_images SET deletedAt = :deletedAt WHERE receiptId = :receiptId")
     suspend fun markImageDeleted(receiptId: String, deletedAt: String)
+
+    @Query("DELETE FROM receipt_images WHERE receiptId = :receiptId")
+    suspend fun deleteReceiptImage(receiptId: String)
+
+    @Query("DELETE FROM receipts WHERE receiptId = :receiptId")
+    suspend fun deleteReceipt(receiptId: String)
 
     @Transaction
     suspend fun enqueueOnce(receiptId: String, queuedAt: String): Boolean {

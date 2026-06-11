@@ -14,34 +14,97 @@ import work.temp1209.kakeibo.MainActivity
 import work.temp1209.kakeibo.R
 
 object AnalysisNotifications {
-    const val CHANNEL_ID = "analysis"
     const val EXTRA_RECEIPT_ID = "extra_receipt_id"
+
+    /** 解析が完了し、確定扱いで一覧に載ったとき */
+    const val CHANNEL_ID_COMPLETED = "analysis_completed"
+
+    /** 解析はできたが低信頼・必須欠落などでユーザー確認が必要なとき */
+    const val CHANNEL_ID_NEEDS_REVIEW = "analysis_needs_review"
+
+    /** API/ネットワーク/パース等で解析自体が失敗したとき */
+    const val CHANNEL_ID_FAILED = "analysis_failed"
+
+    @Deprecated("チャネルを種別ごとに分割した。互換のため残す", ReplaceWith("CHANNEL_ID_COMPLETED"))
+    const val CHANNEL_ID = CHANNEL_ID_COMPLETED
 
     fun ensureChannel(context: Context) {
         val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val existing = mgr.getNotificationChannel(CHANNEL_ID)
-        if (existing != null) return
 
-        mgr.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                "解析通知",
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                description = "レシート解析の完了/失敗を通知します"
-            }
+        fun createIfMissing(
+            id: String,
+            name: String,
+            description: String,
+            importance: Int = NotificationManager.IMPORTANCE_DEFAULT,
+        ) {
+            if (mgr.getNotificationChannel(id) != null) return
+            mgr.createNotificationChannel(
+                NotificationChannel(id, name, importance).apply {
+                    this.description = description
+                },
+            )
+        }
+
+        createIfMissing(
+            CHANNEL_ID_COMPLETED,
+            "解析完了",
+            "解析が完了し、一覧に反映されたときの通知です",
+        )
+        createIfMissing(
+            CHANNEL_ID_NEEDS_REVIEW,
+            "要確認",
+            "低信頼や必須項目の不足などで、内容の確認が必要なときの通知です",
+            NotificationManager.IMPORTANCE_DEFAULT,
+        )
+        createIfMissing(
+            CHANNEL_ID_FAILED,
+            "解析失敗",
+            "通信エラーや応答の解釈失敗などで、解析処理が完了できなかったときの通知です",
+            NotificationManager.IMPORTANCE_DEFAULT,
         )
     }
 
     fun notifyDone(context: Context, receiptId: String) {
-        notify(context, receiptId, title = "解析完了", text = "レシートの解析が完了しました", notificationId = receiptId.hashCode())
+        notify(
+            context = context,
+            channelId = CHANNEL_ID_COMPLETED,
+            receiptId = receiptId,
+            title = "解析完了",
+            text = "レシートの解析が完了しました",
+            notificationId = receiptId.hashCode(),
+        )
+    }
+
+    fun notifyNeedsReview(context: Context, receiptId: String) {
+        notify(
+            context = context,
+            channelId = CHANNEL_ID_NEEDS_REVIEW,
+            receiptId = receiptId,
+            title = "要確認",
+            text = "解析結果の確認が必要です",
+            notificationId = receiptId.hashCode(),
+        )
     }
 
     fun notifyFailed(context: Context, receiptId: String) {
-        notify(context, receiptId, title = "解析失敗", text = "レシートの解析に失敗しました", notificationId = receiptId.hashCode())
+        notify(
+            context = context,
+            channelId = CHANNEL_ID_FAILED,
+            receiptId = receiptId,
+            title = "解析失敗",
+            text = "レシートの解析に失敗しました",
+            notificationId = receiptId.hashCode(),
+        )
     }
 
-    private fun notify(context: Context, receiptId: String, title: String, text: String, notificationId: Int) {
+    private fun notify(
+        context: Context,
+        channelId: String,
+        receiptId: String,
+        title: String,
+        text: String,
+        notificationId: Int,
+    ) {
         ensureChannel(context)
 
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
@@ -62,7 +125,7 @@ object AnalysisNotifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val n = NotificationCompat.Builder(context, CHANNEL_ID)
+        val n = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
@@ -75,4 +138,3 @@ object AnalysisNotifications {
         }
     }
 }
-

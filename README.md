@@ -8,6 +8,7 @@ Android向け家計簿アプリ（Kotlin + Jetpack Compose）。
 ## ドキュメント
 - 要件定義: `REQUIREMENTS.md`
 - 外部サービス準備メモ: `EXTERNAL_SETUP.md`
+- 日報: `docs/daily/`（テンプレート: `docs/daily/TEMPLATE.md`）
 
 ## 秘密情報の扱い（重要）
 - **APIキー等はコミットしない**（`.gitignore`で除外、コードへ直書き禁止）
@@ -18,5 +19,5 @@ Android向け家計簿アプリ（Kotlin + Jetpack Compose）。
 - 実機: Pixel 8a（ワイヤレスデバッグ）
 
 ## ライセンス
-- Private運用のため、必要になったら追加
+MIT License — 詳細は [LICENSE](LICENSE) を参照
 

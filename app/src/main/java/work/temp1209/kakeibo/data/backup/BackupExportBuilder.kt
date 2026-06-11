@@ -71,6 +71,7 @@ object BackupExportBuilder {
 
     private fun ReceiptEntity.toDto() = ReceiptBackupDto(
         receiptId = receiptId,
+        inputKind = inputKind,
         receiptDatetime = receiptDatetime,
         capturedAt = capturedAt,
         merchantName = merchantName,

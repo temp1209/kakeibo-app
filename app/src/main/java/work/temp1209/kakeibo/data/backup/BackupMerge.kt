@@ -64,6 +64,7 @@ object BackupMerge {
 
     private fun ReceiptBackupDto.toEntity() = ReceiptEntity(
         receiptId = receiptId,
+        inputKind = inputKind ?: "RECEIPT_CAMERA",
         capturedAt = capturedAt ?: receiptDatetime ?: updatedAt,
         receiptDatetime = receiptDatetime,
         analysisStatus = analysisStatus,

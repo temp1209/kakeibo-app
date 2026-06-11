@@ -63,7 +63,15 @@ object ReceiptJsonSchema {
             .put(
                 "properties",
                 JSONObject()
-                    .put("receiptDatetime", JSONObject().put("type", "string"))
+                    .put(
+                        "receiptDatetime",
+                        JSONObject()
+                            .put("type", "string")
+                            .put(
+                                "description",
+                                "ISO 8601、日本時刻想定で末尾+09:00（例 2024-05-01T14:30:00+09:00）。時刻不明なら同日T00:00:00+09:00。",
+                            ),
+                    )
                     .put("capturedAt", JSONObject().put("type", "string"))
                     .put("merchantName", JSONObject().put("type", "string"))
                     .put("totalAmountYen", JSONObject().put("type", "integer").put("minimum", 0))
@@ -78,8 +86,25 @@ object ReceiptJsonSchema {
             .put(
                 "properties",
                 JSONObject()
-                    .put("lineIndex", JSONObject().put("type", "integer").put("minimum", 0))
-                    .put("itemName", JSONObject().put("type", "string"))
+                    .put(
+                        "lineIndex",
+                        JSONObject()
+                            .put("type", "integer")
+                            .put("minimum", 0)
+                            .put(
+                                "description",
+                                "itemsに出力する商品行を上から0起算の連番。セット統合後もレシート内で一意。",
+                            ),
+                    )
+                    .put(
+                        "itemName",
+                        JSONObject()
+                            .put("type", "string")
+                            .put(
+                                "description",
+                                "送信プロンプトの「1明細=1商品」「セット統合」「型番からの日本語名」に従う。",
+                            ),
+                    )
                     .put("quantity", JSONObject().put("type", "integer").put("minimum", 1))
                     .put("lineTotalYen", JSONObject().put("type", "integer").put("minimum", 0))
                     .put("categoryMajor", JSONObject().put("type", "string").put("enum", categoryMajorEnum))
@@ -109,7 +134,18 @@ object ReceiptJsonSchema {
                     .put("schemaVersion", JSONObject().put("type", "string").put("enum", JSONArray().put("1.0")))
                     .put("receipt", receipt)
                     .put("items", JSONObject().put("type", "array").put("items", item))
-                    .put("warnings", JSONObject().put("type", "array").put("items", JSONObject().put("type", "string"))),
+                    .put(
+                        "warnings",
+                        JSONObject()
+                            .put("type", "array")
+                            .put("items", JSONObject().put("type", "string"))
+                            .put(
+                                "description",
+                                "解析上の注意（日本語短文の配列）。入力がレシート写真でもスクリーンショットでも、" +
+                                    "売上レシート・領収・決済完了表示など購入会計として読み取れる内容が全くない場合は、" +
+                                    "この配列に **`[NO_RECEIPT]` と完全一致する文字列** を1要素以上含める（他の警告と併用可）。その場合 items は空配列。",
+                            ),
+                    ),
             )
             .put("required", JSONArray().put("schemaVersion").put("receipt").put("items"))
     }

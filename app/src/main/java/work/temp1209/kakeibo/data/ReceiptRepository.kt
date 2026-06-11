@@ -27,7 +27,10 @@ import java.util.UUID
 class ReceiptRepository(private val context: Context) {
     private val dao = AppDatabase.get(context).receiptDao()
 
-    suspend fun savePendingReceipt(imageUri: Uri): String = withContext(Dispatchers.IO) {
+    suspend fun savePendingReceipt(
+        imageUri: Uri,
+        inputKind: String = "RECEIPT_CAMERA",
+    ): String = withContext(Dispatchers.IO) {
         val now = Instant.now().toString()
         val receiptId = UUID.randomUUID().toString()
         Log.d(TAG, "savePendingReceipt start receiptId=$receiptId uri=${imageUri.scheme}")
@@ -45,6 +48,7 @@ class ReceiptRepository(private val context: Context) {
         dao.upsertReceipt(
             ReceiptEntity(
                 receiptId = receiptId,
+                inputKind = inputKind,
                 capturedAt = now,
                 receiptDatetime = now, // 暫定: Phase1では capturedAt をコピー（後でGemini/手入力で上書き）
                 analysisStatus = "PENDING",
@@ -81,6 +85,93 @@ class ReceiptRepository(private val context: Context) {
         receiptId
     }
 
+    data class ManualReceiptItemInput(
+        val itemName: String,
+        val quantity: Int,
+        /** 行合計（数量込みの合計金額） */
+        val lineTotalYen: Long,
+        val categoryMajor: String,
+        val categoryMinor: String,
+        val necessityScore: Int,
+    )
+
+    data class ManualReceiptInput(
+        val receiptDatetime: String,
+        val merchantName: String,
+        val totalAmountYen: Long,
+        val paymentMethod: String,
+        val paymentServiceName: String?,
+        val items: List<ManualReceiptItemInput>,
+    )
+
+    /**
+     * Phase6: レシートなし手入力。
+     * - gemini_results を作らない
+     * - analysis_queue に入れない
+     * - 保存後も analysisStatus=DONE / needsReview=0
+     */
+    suspend fun saveManualNoReceipt(input: ManualReceiptInput): Result<String> = withContext(Dispatchers.IO) {
+        if (input.items.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("明細は1件以上必要です"))
+        }
+        if (input.totalAmountYen < 0) {
+            return@withContext Result.failure(IllegalArgumentException("合計金額が不正です"))
+        }
+
+        val sum = input.items.sumOf { it.lineTotalYen }
+        if (sum != input.totalAmountYen) {
+            return@withContext Result.failure(
+                IllegalArgumentException("明細合計と合計金額が一致しません（明細=$sum 合計=${input.totalAmountYen}）"),
+            )
+        }
+
+        val now = Instant.now().toString()
+        val receiptId = UUID.randomUUID().toString()
+        val receipt =
+            ReceiptEntity(
+                receiptId = receiptId,
+                inputKind = "MANUAL_NO_RECEIPT",
+                capturedAt = now, // 要件: 保存ボタン押下時の Instant
+                receiptDatetime = input.receiptDatetime,
+                analysisStatus = "DONE",
+                merchantName = input.merchantName,
+                totalAmountYen = input.totalAmountYen,
+                paymentMethod = input.paymentMethod,
+                paymentServiceName = input.paymentServiceName,
+                analysisStartedAt = null,
+                analysisCompletedAt = null,
+                analysisErrorMessage = null,
+                needsReview = 0,
+                itemsSubtotalYen = sum,
+                adjustmentYen = 0,
+                deletedAt = null,
+                deleteReason = null,
+                backupRevision = 0,
+                createdAt = now,
+                updatedAt = now,
+            )
+
+        val items =
+            input.items.mapIndexed { idx, it ->
+                ReceiptItemEntity(
+                    itemId = UUID.randomUUID().toString(),
+                    receiptId = receiptId,
+                    lineIndex = idx,
+                    itemName = it.itemName,
+                    quantity = it.quantity,
+                    lineTotalYen = it.lineTotalYen,
+                    categoryMajor = it.categoryMajor,
+                    categoryMinor = it.categoryMinor,
+                    necessityScore = it.necessityScore,
+                    confidence = 1.0,
+                    isAdjustment = 0,
+                )
+            }
+
+        dao.replaceReceiptAndItems(receipt, items)
+        Result.success(receiptId)
+    }
+
     suspend fun enqueueAnalysis(receiptId: String): Boolean = withContext(Dispatchers.IO) {
         val now = Instant.now().toString()
         val enqueued = dao.enqueueOnce(receiptId = receiptId, queuedAt = now)
@@ -112,7 +203,11 @@ class ReceiptRepository(private val context: Context) {
     }
 
     suspend fun listReceiptRowsForMonth(yearMonth: String) = withContext(Dispatchers.IO) {
-        dao.listReceiptRowsFiltered(yearMonth)
+        if (yearMonth.isEmpty()) {
+            dao.listReceiptRowsAllPeriods()
+        } else {
+            dao.listReceiptRowsFiltered(yearMonth)
+        }
     }
 
     suspend fun getReceiptOrNull(receiptId: String) = withContext(Dispatchers.IO) {
@@ -243,6 +338,51 @@ class ReceiptRepository(private val context: Context) {
             deleted++
         }
         deleted
+    }
+
+    /**
+     * プレビュー中にキャンセルされた下書き（PENDING）を削除する。
+     * - DBから receipts / receipt_images を消す
+     * - 内部ファイルを物理削除する（file:// のみ）
+     */
+    suspend fun deleteDraftReceipt(receiptId: String): Unit = withContext(Dispatchers.IO) {
+        dao.deleteQueueForReceipt(receiptId)
+        val img = dao.getReceiptImage(receiptId)
+        if (img != null) {
+            val uri = runCatching { Uri.parse(img.localUri) }.getOrNull()
+            val file = uri?.toFileOrNull()
+            if (file != null && file.exists()) {
+                runCatching { file.delete() }
+            }
+        }
+        dao.deleteReceiptImage(receiptId)
+        dao.deleteReceipt(receiptId)
+    }
+
+    /**
+     * Phase6: 証拠画像の解析失敗時に「手入力へ切り替え」する。
+     * - inputKind を MANUAL_NO_RECEIPT に変更
+     * - backupRevision を +1
+     * - 明細・画像・gemini_results は保持（この関数では触らない）
+     */
+    suspend fun switchEvidenceFailedToManual(receiptId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val existing = dao.getReceiptOrNull(receiptId)
+            ?: return@withContext Result.failure(IllegalStateException("レシートが見つかりません"))
+        if (existing.inputKind != "EVIDENCE_IMAGE") {
+            return@withContext Result.failure(IllegalStateException("証拠画像のレシートではありません"))
+        }
+        if (existing.analysisStatus != "FAILED") {
+            return@withContext Result.failure(IllegalStateException("解析失敗のレシートではありません"))
+        }
+        val now = Instant.now().toString()
+        dao.upsertReceipt(
+            existing.copy(
+                inputKind = "MANUAL_NO_RECEIPT",
+                backupRevision = existing.backupRevision + 1,
+                updatedAt = now,
+            ),
+        )
+        Result.success(Unit)
     }
 
     private fun Uri.toFileOrNull(): File? {

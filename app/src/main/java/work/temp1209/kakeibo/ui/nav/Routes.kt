@@ -7,10 +7,14 @@ sealed class Route(val value: String) {
     data object Preview : Route("preview/{imageUri}") {
         fun create(imageUri: Uri): String = "preview/${Uri.encode(imageUri.toString())}"
     }
+    data object PreviewDraft : Route("preview-draft/{receiptId}") {
+        fun create(receiptId: String): String = "preview-draft/$receiptId"
+    }
     data object List : Route("list")
     data object Analysis : Route("analysis")
     data object Notifications : Route("notifications")
     data object Settings : Route("settings")
+    data object ManualEntry : Route("manual-entry")
     data object ReceiptDetail : Route("receipt/{receiptId}") {
         fun create(receiptId: String) = "receipt/$receiptId"
     }
