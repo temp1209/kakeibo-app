@@ -34,3 +34,45 @@
 - 初期は `try/catch` で握りつぶさず、**落として原因を見る**方が速い。
 - 安定してきたら、ユーザー向けにはエラー表示、内部的にはログ＋状態遷移を整理する。
 
+## 7) 開発中のデータ退避（リリース機能ではない）
+
+大きな改修の前に、実機データを PC へ取り出しておく手順。**アプリ UI には出さない**（自分用 debug 運用向け）。
+
+### 方法 A: adb で DB を pull（手軽・全データ）
+
+1. Pixel 8a を adb 接続（`adb devices` で表示されること）
+2. リポジトリルートで:
+
+```powershell
+.\scripts\dev-pull-device-data.ps1
+```
+
+3. `backups/dev/YYYY-MM-DD_HHmmss/kakeibo.db` ができる（画像があれば `receipts/` も）
+
+- **debug ビルド**のみ `run-as work.temp1209.kakeibo` が使える
+- レシート画像は内部ストレージ `files/receipts/`（40日保持）。スクリプトは tar 対応端末なら一緒に退避を試みる
+- 復元は手動で DB を戻すより、下記 Drive JSON の方が安全
+
+### 方法 B: Drive バックアップ（JSON・取引データのみ）
+
+1. アプリ **設定** → **今すぐバックアップ**（Google ログイン済み）
+2. JSON は Drive の **appDataFolder**（ユーザーからは見えない隠し領域）に保存される
+3. 万が一の復元はアプリの **Driveから復元（マージ）**
+
+画像は JSON に含まれない（要件どおり）。画像まで残すなら方法 A を併用。
+
+### おすすめ（改善着手前）
+
+1. `dev-pull-device-data.ps1` で DB（＋可能なら画像）を PC に保存
+2. あわせて設定の **今すぐバックアップ** も実行
+3. `backups/dev/` を ZIP して別場所にコピー
+
+`backups/` は `.gitignore` 済み想定（コミットしない）。
+
+**`.db` の見方**: SQLite のバイナリファイル。テキストエディタでは文字化けする。先頭が `SQLite format 3` なら正常。[DB Browser for SQLite](https://sqlitebrowser.org/) 等で開く。
+
+```powershell
+# 実行ポリシーで止まる場合
+powershell -ExecutionPolicy Bypass -File .\scripts\dev-pull-device-data.ps1
+```
+
