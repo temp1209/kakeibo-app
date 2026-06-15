@@ -51,6 +51,7 @@ import coil.compose.AsyncImage
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
+import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.domain.CategoryCatalog
 import work.temp1209.kakeibo.data.domain.PaymentMethodCatalog
 import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
@@ -69,6 +70,8 @@ fun ReceiptDetailScreen(
     onOpenReview: () -> Unit,
     onDeleteReceipt: suspend (String, deleteReason: String) -> Unit,
     onSwitchEvidenceFailedToManual: suspend (String) -> Result<Unit>,
+    onResendAnalysis: suspend (String) -> ReceiptRepository.ResendAnalysisResult,
+    onOpenSettings: () -> Unit,
 ) {
     var loading by remember(receiptId) { mutableStateOf(true) }
     var receipt by remember(receiptId) { mutableStateOf<ReceiptEntity?>(null) }
@@ -79,23 +82,51 @@ fun ReceiptDetailScreen(
     var showImageSheet by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showResendConfirm by remember { mutableStateOf(false) }
+    var resendMessage by remember { mutableStateOf<String?>(null) }
+    var resendInFlight by remember { mutableStateOf(false) }
+    var resendCooldownUntil by remember { mutableStateOf(0L) }
     var deleteReason by remember { mutableStateOf("MISTAKE") }
     val scope = rememberCoroutineScope()
+
+    suspend fun reload() {
+        val r = loadReceipt(receiptId)
+        receipt = r
+        if (r != null) {
+            items = loadVisibleItems(receiptId)
+            image = loadImage(receiptId)
+            geminiJson = loadGeminiJson(receiptId)
+        } else {
+            items = emptyList()
+            image = null
+            geminiJson = null
+        }
+    }
+
+    fun handleResendResult(result: ReceiptRepository.ResendAnalysisResult) {
+        resendMessage = when (result) {
+            ReceiptRepository.ResendAnalysisResult.Success ->
+                "再送信しました。解析が完了するまでお待ちください。"
+            ReceiptRepository.ResendAnalysisResult.ApiKeyMissing ->
+                "Gemini APIキーが未設定です。設定画面で入力してください。"
+            ReceiptRepository.ResendAnalysisResult.ImageMissing ->
+                "画像ファイルが見つかりません。再撮影するか削除してください。"
+            ReceiptRepository.ResendAnalysisResult.AlreadyQueued ->
+                "すでに解析待ちまたは処理中です。"
+            ReceiptRepository.ResendAnalysisResult.NotFailed ->
+                "解析失敗のレシートのみ再送信できます。"
+            ReceiptRepository.ResendAnalysisResult.ReceiptNotFound ->
+                "レシートが見つかりません。"
+        }
+        if (result == ReceiptRepository.ResendAnalysisResult.ApiKeyMissing) {
+            onOpenSettings()
+        }
+    }
 
     LaunchedEffect(receiptId) {
         loading = true
         try {
-            val r = loadReceipt(receiptId)
-            receipt = r
-            if (r != null) {
-                items = loadVisibleItems(receiptId)
-                image = loadImage(receiptId)
-                geminiJson = loadGeminiJson(receiptId)
-            } else {
-                items = emptyList()
-                image = null
-                geminiJson = null
-            }
+            reload()
         } finally {
             loading = false
         }
@@ -243,6 +274,48 @@ fun ReceiptDetailScreen(
             )
         }
 
+        if (showResendConfirm) {
+            AlertDialog(
+                onDismissRequest = { showResendConfirm = false },
+                title = { Text("解析を再送信") },
+                text = { Text("このレシートの解析をもう一度実行します。よろしいですか？") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showResendConfirm = false
+                            scope.launch {
+                                resendInFlight = true
+                                try {
+                                    val result = onResendAnalysis(receiptId)
+                                    handleResendResult(result)
+                                    if (result == ReceiptRepository.ResendAnalysisResult.Success) {
+                                        reload()
+                                    }
+                                } finally {
+                                    resendInFlight = false
+                                    resendCooldownUntil = System.currentTimeMillis() + 3_000L
+                                }
+                            }
+                        },
+                    ) { Text("再送信") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResendConfirm = false }) { Text("キャンセル") }
+                },
+            )
+        }
+
+        resendMessage?.let { msg ->
+            AlertDialog(
+                onDismissRequest = { resendMessage = null },
+                confirmButton = {
+                    TextButton(onClick = { resendMessage = null }) { Text("OK") }
+                },
+                title = { Text("再送信") },
+                text = { Text(msg) },
+            )
+        }
+
         if (showImageSheet && image != null) {
             AlertDialog(
                 onDismissRequest = { showImageSheet = false },
@@ -368,13 +441,33 @@ fun ReceiptDetailScreen(
 
             if (r.needsReview == 1 || r.analysisStatus == "NEEDS_REVIEW" || r.analysisStatus == "FAILED") {
                 item {
+                    val resendEnabled =
+                        !resendInFlight &&
+                            System.currentTimeMillis() >= resendCooldownUntil &&
+                            r.analysisStatus == "FAILED"
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("要確認", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(
+                                text = if (r.analysisStatus == "FAILED") "解析失敗" else "要確認",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
                             r.analysisErrorMessage?.takeIf { it.isNotBlank() }?.let {
                                 Text(it, color = MaterialTheme.colorScheme.onErrorContainer)
                             }
-                            Button(onClick = onOpenReview) { Text("修正画面へ") }
+                            if (r.analysisStatus == "FAILED") {
+                                Button(
+                                    onClick = { showResendConfirm = true },
+                                    enabled = resendEnabled,
+                                ) {
+                                    Text(if (resendInFlight) "送信中…" else "再送信")
+                                }
+                            }
+                            if (r.analysisStatus != "FAILED") {
+                                Button(onClick = onOpenReview) { Text("修正画面へ") }
+                            } else {
+                                Button(onClick = onOpenReview) { Text("手動で修正") }
+                            }
 
                         if (r.analysisStatus == "FAILED" && r.inputKind == "EVIDENCE_IMAGE") {
                             TextButton(

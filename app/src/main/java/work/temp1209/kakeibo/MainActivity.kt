@@ -381,6 +381,8 @@ private fun AppNav(
                     repo = repo,
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
                     onOpenReceiptReview = { id -> navController.navigate(Route.ReceiptReview.create(id)) },
+                    onResendAnalysis = { id -> repo.resendAnalysis(id) },
+                    onOpenSettings = { navController.navigateToTabRoot(Route.Settings.value) },
                 )
             }
             composable(Route.Settings.value) {
@@ -421,6 +423,8 @@ private fun AppNav(
                     onSwitchEvidenceFailedToManual = { id ->
                         repo.switchEvidenceFailedToManual(id)
                     },
+                    onResendAnalysis = { id -> repo.resendAnalysis(id) },
+                    onOpenSettings = { navController.navigateToTabRoot(Route.Settings.value) },
                 )
             }
         }
