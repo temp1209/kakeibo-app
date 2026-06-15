@@ -105,6 +105,13 @@ fun AnalysisScreen(
             }
             item {
                 Text(
+                    "必須度は AI による目安です（境界: 50）。修正画面で調整できます。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            item {
+                Text(
                     "必須寄り（≥50）: ${formatYen(s.mandatoryYen)}（${s.mandatoryLineCount}行）",
                     style = MaterialTheme.typography.bodyMedium,
                 )
