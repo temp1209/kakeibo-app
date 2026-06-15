@@ -76,3 +76,34 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\dev-pull-device-data.ps1
 ```
 
+## 8) Google Drive バックアップが 403 / パーミッションエラーになる
+
+**症状**: 設定で Google ログインは成功するが、「今すぐバックアップ」で失敗する（Snackbar に permission / 403 等）。
+
+### 切り分けチェックリスト
+
+1. **debug.keystore の SHA-1**（PC 載せ替え後はほぼ必須）
+   ```powershell
+   keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android
+   ```
+   - [Google Cloud Console](https://console.cloud.google.com/) → 認証情報 → **Android OAuth クライアント**（`work.temp1209.kakeibo`）に上記 SHA-1 が登録されているか
+   - 詳細: `EXTERNAL_SETUP.md` §6
+
+2. **OAuth 同意画面のテストユーザー**に、ログインした Google アカウントが含まれているか
+
+3. **Google Drive API** がプロジェクトで有効か
+
+4. **スコープ** `drive.appdata` がサインイン時に付与されているか  
+   - 対策: 設定でサインアウト → 再ログイン（スコープ同意を再表示）
+
+### Logcat
+
+- タグ・例外: `DriveHttpException`, OkHttp のレスポンス code / body
+- `DriveBackupWorker` は現状 **403 を success 扱い**する箇所あり → UI に失敗が出ない場合は Worker ログも確認（`KNOWN_ISSUES.md` §2）
+
+### コード上の参照
+
+- `GoogleSignInHelper.kt` — `DRIVE_APPDATA_SCOPE`
+- `DriveBackupRepository.kt` — REST 呼び出し
+- `SettingsScreen.kt` — 手動バックアップの Snackbar
+
