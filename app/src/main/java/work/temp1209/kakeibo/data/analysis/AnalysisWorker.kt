@@ -185,31 +185,31 @@ class AnalysisWorker(
                 }
                 Log.d(TAG, "done receiptId=${entry.receiptId} status=$receiptStatus subtotal=$subtotal adjustment=$adjustment")
             } catch (e: Exception) {
-                val msg = e.message ?: e.javaClass.simpleName
+                val msg = userFacingErrorMessage(e)
                 Log.w(TAG, "failed receiptId=${entry.receiptId} attempt=$attempt error=$msg", e)
-                if (attempt <= 1) {
-                    // Put back to QUEUED for a single retry with WorkManager backoff.
-                    dao.requeue(entry.queueId, attemptCount = attempt, lastError = msg)
-                    return Result.retry()
-                } else {
-                    val finishedAt = Instant.now().toString()
-                    val existing = dao.getReceiptOrNull(entry.receiptId)
-                    if (existing != null) {
-                        dao.upsertReceipt(
-                            existing.copy(
-                                analysisStatus = "FAILED",
-                                analysisStartedAt = existing.analysisStartedAt ?: now,
-                                analysisCompletedAt = finishedAt,
-                                analysisErrorMessage = msg,
-                                needsReview = 1,
-                                updatedAt = finishedAt,
-                            )
-                        )
-                    }
-                    dao.finishQueue(entry.queueId, status = "FAILED", finishedAt = finishedAt, lastError = msg, attemptCount = attempt)
-                    if (shouldSendAnalysisOsNotification(existing)) {
-                        AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
-                    }
+                val finishedAt = Instant.now().toString()
+                val existing = dao.getReceiptOrNull(entry.receiptId)
+                if (existing != null) {
+                    dao.upsertReceipt(
+                        existing.copy(
+                            analysisStatus = "FAILED",
+                            analysisStartedAt = existing.analysisStartedAt ?: now,
+                            analysisCompletedAt = finishedAt,
+                            analysisErrorMessage = msg,
+                            needsReview = 1,
+                            updatedAt = finishedAt,
+                        ),
+                    )
+                }
+                dao.finishQueue(
+                    queueId = entry.queueId,
+                    status = "FAILED",
+                    finishedAt = finishedAt,
+                    lastError = msg,
+                    attemptCount = attempt,
+                )
+                if (shouldSendAnalysisOsNotification(existing)) {
+                    AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
                 }
             }
         }
@@ -263,6 +263,23 @@ class AnalysisWorker(
             AnalysisNotifications.notifyFailed(applicationContext, receiptId)
         }
         Log.w(TAG, "no receipt in image receiptId=$receiptId")
+    }
+
+    private fun userFacingErrorMessage(e: Exception): String {
+        val msg = e.message.orEmpty()
+        return when {
+            msg.contains("timeout", ignoreCase = true) ->
+                "通信がタイムアウトしました。しばらく待ってから再送信してください。"
+            msg.contains("429") || msg.contains("quota", ignoreCase = true) ->
+                "APIの利用上限に達した可能性があります。時間をおいて再送信してください。"
+            msg.contains("receipt image missing", ignoreCase = true) ||
+                msg.contains("failed to read image", ignoreCase = true) ->
+                "画像ファイルが見つかりません。再撮影するか削除してください。"
+            msg.contains("no candidates", ignoreCase = true) ||
+                msg.contains("empty response", ignoreCase = true) ->
+                "AIから有効な応答がありませんでした。再送信をお試しください。"
+            else -> "解析に失敗しました: ${e.message ?: "不明なエラー"}"
+        }
     }
 
     private fun extractStrictJson(rawResponse: String): String {

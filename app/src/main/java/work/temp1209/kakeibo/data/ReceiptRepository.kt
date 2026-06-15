@@ -19,6 +19,7 @@ import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.db.ReceiptListRow
 import work.temp1209.kakeibo.data.domain.NecessityUtils
 import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
+import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -407,9 +408,89 @@ class ReceiptRepository(private val context: Context) {
         dao.listNeedsReview(limit)
     }
 
+    suspend fun listFailedForResend(limit: Int = 30) = withContext(Dispatchers.IO) {
+        dao.listFailedForResend(limit)
+    }
+
+    sealed class ResendAnalysisResult {
+        data object Success : ResendAnalysisResult()
+        data object ReceiptNotFound : ResendAnalysisResult()
+        data object NotFailed : ResendAnalysisResult()
+        data object ApiKeyMissing : ResendAnalysisResult()
+        data object ImageMissing : ResendAnalysisResult()
+        data object AlreadyQueued : ResendAnalysisResult()
+    }
+
+    /**
+     * Phase 6.2: 解析失敗レシートを手動で再送信する。
+     * - キューを QUEUED に戻し attemptCount をリセット
+     * - 自動リトライは行わない（AnalysisWorker 側で1回のみ実行）
+     */
+    suspend fun resendAnalysis(receiptId: String): ResendAnalysisResult = withContext(Dispatchers.IO) {
+        val existing = dao.getReceiptOrNull(receiptId)
+            ?: return@withContext ResendAnalysisResult.ReceiptNotFound
+        if (existing.deletedAt != null) {
+            return@withContext ResendAnalysisResult.ReceiptNotFound
+        }
+        if (existing.analysisStatus != "FAILED") {
+            return@withContext ResendAnalysisResult.NotFailed
+        }
+        if (existing.inputKind == "MANUAL_NO_RECEIPT") {
+            return@withContext ResendAnalysisResult.NotFailed
+        }
+        if (!GeminiApiKeyStore(context).hasKey()) {
+            return@withContext ResendAnalysisResult.ApiKeyMissing
+        }
+        if (!isReceiptImageReadable(receiptId)) {
+            return@withContext ResendAnalysisResult.ImageMissing
+        }
+
+        val queueEntry = dao.getQueueEntryForReceipt(receiptId)
+        if (queueEntry != null && queueEntry.status in IN_FLIGHT_QUEUE_STATUSES) {
+            return@withContext ResendAnalysisResult.AlreadyQueued
+        }
+
+        val now = Instant.now().toString()
+        val queued = if (queueEntry != null) {
+            dao.resetQueueForResend(receiptId, now) > 0
+        } else {
+            dao.enqueueOnce(receiptId, now)
+        }
+        if (!queued) {
+            return@withContext ResendAnalysisResult.AlreadyQueued
+        }
+
+        dao.upsertReceipt(
+            existing.copy(
+                analysisStatus = "PENDING",
+                analysisStartedAt = null,
+                analysisCompletedAt = null,
+                analysisErrorMessage = null,
+                needsReview = 0,
+                updatedAt = now,
+            ),
+        )
+        scheduleAnalysisWork()
+        Log.d(TAG, "resendAnalysis receiptId=$receiptId")
+        ResendAnalysisResult.Success
+    }
+
+    private suspend fun isReceiptImageReadable(receiptId: String): Boolean {
+        val img = dao.getReceiptImage(receiptId) ?: return false
+        if (img.deletedAt != null) return false
+        val uri = runCatching { Uri.parse(img.localUri) }.getOrNull() ?: return false
+        val file = uri.toFileOrNull()
+        if (file != null) return file.exists()
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { }
+            true
+        }.getOrDefault(false)
+    }
+
     companion object {
         private const val TAG = "ReceiptRepo"
         private const val UNIQUE_WORK_NAME = "analysis-queue"
+        private val IN_FLIGHT_QUEUE_STATUSES = setOf("QUEUED", "RUNNING")
     }
 }
 

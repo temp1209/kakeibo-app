@@ -89,6 +89,15 @@ interface ReceiptDao {
     )
     suspend fun listNeedsReview(limit: Int): List<ReceiptEntity>
 
+    @Query(
+        """
+        SELECT * FROM receipts
+        WHERE deletedAt IS NULL AND analysisStatus = 'FAILED' AND inputKind != 'MANUAL_NO_RECEIPT'
+        ORDER BY COALESCE(analysisCompletedAt, updatedAt) DESC LIMIT :limit
+        """,
+    )
+    suspend fun listFailedForResend(limit: Int): List<ReceiptEntity>
+
     @Query("SELECT * FROM receipts ORDER BY updatedAt DESC")
     suspend fun listAllReceiptsForExport(): List<ReceiptEntity>
 
@@ -126,6 +135,9 @@ interface ReceiptDao {
     @Query("SELECT * FROM receipt_images WHERE receiptId = :receiptId LIMIT 1")
     suspend fun getReceiptImage(receiptId: String): ReceiptImageEntity?
 
+    @Query("SELECT * FROM analysis_queue WHERE receiptId = :receiptId LIMIT 1")
+    suspend fun getQueueEntryForReceipt(receiptId: String): AnalysisQueueEntity?
+
     @Query("SELECT * FROM analysis_queue WHERE status = 'QUEUED' ORDER BY queuedAt ASC LIMIT 1")
     suspend fun getNextQueuedOrNull(): AnalysisQueueEntity?
 
@@ -137,6 +149,16 @@ interface ReceiptDao {
 
     @Query("UPDATE analysis_queue SET status = 'QUEUED', attemptCount = :attemptCount, lastError = :lastError, startedAt = NULL, finishedAt = NULL WHERE queueId = :queueId")
     suspend fun requeue(queueId: String, attemptCount: Int, lastError: String?)
+
+    @Query(
+        """
+        UPDATE analysis_queue
+        SET status = 'QUEUED', attemptCount = 0, lastError = NULL,
+            queuedAt = :queuedAt, startedAt = NULL, finishedAt = NULL
+        WHERE receiptId = :receiptId
+        """,
+    )
+    suspend fun resetQueueForResend(receiptId: String, queuedAt: String): Int
 
     @Query("SELECT COUNT(*) FROM analysis_queue WHERE status IN ('QUEUED','RUNNING')")
     suspend fun countQueueInFlight(): Int
