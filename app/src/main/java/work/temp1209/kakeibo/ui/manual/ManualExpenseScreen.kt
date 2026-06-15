@@ -13,7 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,7 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -48,6 +46,8 @@ import kotlinx.coroutines.launch
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.domain.CategoryCatalog
 import work.temp1209.kakeibo.data.domain.PaymentMethodCatalog
+import work.temp1209.kakeibo.ui.common.ExpenseLineEditorCard
+import work.temp1209.kakeibo.ui.common.ExpenseLineState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -81,7 +81,7 @@ fun ManualExpenseScreen(
     var lines by remember {
         mutableStateOf(
             listOf(
-                ManualLineState(
+                ExpenseLineState(
                     itemName = "",
                     quantityText = "1",
                     lineTotalText = "",
@@ -329,7 +329,7 @@ fun ManualExpenseScreen(
                     onClick = {
                         if (lines.size < 30) {
                             lines =
-                                lines + ManualLineState(
+                                lines + ExpenseLineState(
                                     itemName = "",
                                     quantityText = "1",
                                     lineTotalText = "",
@@ -347,7 +347,7 @@ fun ManualExpenseScreen(
             }
 
             lines.forEachIndexed { idx, s ->
-                ManualLineEditorCard(
+                ExpenseLineEditorCard(
                     index = idx,
                     state = s,
                     onChange = { new ->
@@ -372,132 +372,6 @@ fun ManualExpenseScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-private data class ManualLineState(
-    val itemName: String,
-    val quantityText: String,
-    val lineTotalText: String,
-    val categoryMajor: String,
-    val categoryMinor: String,
-    val necessityScore: Int,
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ManualLineEditorCard(
-    index: Int,
-    state: ManualLineState,
-    onChange: (ManualLineState) -> Unit,
-    onRemove: () -> Unit,
-    removeEnabled: Boolean,
-) {
-    var majorMenu by remember { mutableStateOf(false) }
-    var minorMenu by remember { mutableStateOf(false) }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("${index + 1}行目", fontWeight = FontWeight.SemiBold)
-                IconButton(onClick = onRemove, enabled = removeEnabled) {
-                    Icon(Icons.Filled.Delete, contentDescription = "削除")
-                }
-            }
-
-            OutlinedTextField(
-                value = state.itemName,
-                onValueChange = { onChange(state.copy(itemName = it.take(120))) },
-                label = { Text("商品名（必須・1〜120）") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = state.quantityText,
-                    onValueChange = { onChange(state.copy(quantityText = it.filter { ch -> ch.isDigit() }.take(3))) },
-                    label = { Text("数量（必須）") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = state.lineTotalText,
-                    onValueChange = { onChange(state.copy(lineTotalText = it.filter { ch -> ch.isDigit() }.take(12))) },
-                    label = { Text("行合計（円・必須）") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
-            }
-
-            ExposedDropdownMenuBox(
-                expanded = majorMenu,
-                onExpandedChange = { majorMenu = !majorMenu },
-            ) {
-                OutlinedTextField(
-                    value = CategoryCatalog.majorLabel(state.categoryMajor),
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("大カテゴリ") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = majorMenu) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(),
-                )
-                DropdownMenu(expanded = majorMenu, onDismissRequest = { majorMenu = false }) {
-                    CategoryCatalog.majorsOrdered.forEach { (code, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                val newMajor = code
-                                val newMinor = CategoryCatalog.minorsFor(newMajor).firstOrNull() ?: "その他"
-                                onChange(state.copy(categoryMajor = newMajor, categoryMinor = newMinor))
-                                majorMenu = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            ExposedDropdownMenuBox(
-                expanded = minorMenu,
-                onExpandedChange = { minorMenu = !minorMenu },
-            ) {
-                OutlinedTextField(
-                    value = state.categoryMinor,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("小カテゴリ") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = minorMenu) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(),
-                )
-                DropdownMenu(expanded = minorMenu, onDismissRequest = { minorMenu = false }) {
-                    CategoryCatalog.minorsFor(state.categoryMajor).forEach { m ->
-                        DropdownMenuItem(
-                            text = { Text(m) },
-                            onClick = {
-                                onChange(state.copy(categoryMinor = m))
-                                minorMenu = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            Text("必須度: ${state.necessityScore}", style = MaterialTheme.typography.bodySmall)
-            Slider(
-                value = state.necessityScore.toFloat(),
-                onValueChange = { onChange(state.copy(necessityScore = it.toInt().coerceIn(0, 100))) },
-                valueRange = 0f..100f,
-                steps = 99,
-            )
         }
     }
 }
