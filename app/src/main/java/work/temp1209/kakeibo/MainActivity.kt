@@ -399,9 +399,7 @@ private fun AppNav(
                     receiptId = receiptId,
                     repo = repo,
                     onBack = { navController.popBackStack() },
-                    onSaved = {
-                        navController.popBackStack(Route.List.value, inclusive = false)
-                    },
+                    onSaved = { navController.popBackStack() },
                 )
             }
 
