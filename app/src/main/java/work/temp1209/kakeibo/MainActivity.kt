@@ -1,5 +1,6 @@
 package work.temp1209.kakeibo
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,6 +17,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -24,6 +27,7 @@ import androidx.navigation.navArgument
 import androidx.core.net.toUri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +40,7 @@ import work.temp1209.kakeibo.ui.camera.CameraScreen
 import work.temp1209.kakeibo.ui.detail.ReceiptDetailScreen
 import work.temp1209.kakeibo.ui.nav.bottomTabs
 import work.temp1209.kakeibo.ui.nav.Route
+import work.temp1209.kakeibo.ui.nav.isTabRoute
 import work.temp1209.kakeibo.ui.add.AddExpenseSheet
 import work.temp1209.kakeibo.ui.permissions.requireCameraPermission
 import work.temp1209.kakeibo.ui.preview.PreviewScreen
@@ -59,14 +64,38 @@ import work.temp1209.kakeibo.data.image.EvidenceImageImporter
 /** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
 private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
 
+private fun Intent.isLauncherWithoutDeepLink(): Boolean =
+    action == Intent.ACTION_MAIN &&
+        categories?.contains(Intent.CATEGORY_LAUNCHER) == true &&
+        getStringExtra(AnalysisNotifications.EXTRA_RECEIPT_ID) == null
+
+/**
+ * ボトムタブへ遷移する。詳細・修正・プレビュー等の子画面はスタックから除去し、
+ * 各タブの [rememberSaveable] 状態は [saveState]/[restoreState] で維持する。
+ */
+private fun NavController.navigateToTabRoot(targetRoute: String) {
+    navigate(targetRoute) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
 class MainActivity : ComponentActivity() {
     private val deepLinkReceiptId = mutableStateOf<String?>(null)
+    private val launcherResetToken = mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         AnalysisNotifications.ensureChannel(this)
         deepLinkReceiptId.value = intent.getStringExtra(AnalysisNotifications.EXTRA_RECEIPT_ID)
+        // プロセス復帰後のランチャー起動: 子画面にいる場合はカメラへ戻す
+        if (savedInstanceState != null && intent.isLauncherWithoutDeepLink() && deepLinkReceiptId.value == null) {
+            launcherResetToken.intValue++
+        }
         setContent {
             KakeiboappTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -74,15 +103,20 @@ class MainActivity : ComponentActivity() {
                         innerPadding = innerPadding,
                         deepLinkReceiptId = deepLinkReceiptId.value,
                         onConsumeDeepLink = { deepLinkReceiptId.value = null },
+                        launcherResetToken = launcherResetToken.intValue,
                     )
                 }
             }
         }
     }
 
-    override fun onNewIntent(intent: android.content.Intent) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         deepLinkReceiptId.value = intent.getStringExtra(AnalysisNotifications.EXTRA_RECEIPT_ID)
+        if (intent.isLauncherWithoutDeepLink()) {
+            launcherResetToken.intValue++
+        }
     }
 }
 
@@ -91,10 +125,13 @@ private fun AppNav(
     innerPadding: PaddingValues,
     deepLinkReceiptId: String?,
     onConsumeDeepLink: () -> Unit,
+    launcherResetToken: Int,
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val repo = remember { ReceiptRepository(context) }
+    val scope = rememberCoroutineScope()
+    var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
     // 要件: 起動時に40日超過画像を掃除（冪等）
     LaunchedEffect(Unit) {
@@ -108,10 +145,14 @@ private fun AppNav(
         onConsumeDeepLink()
     }
 
+    LaunchedEffect(launcherResetToken) {
+        if (launcherResetToken == 0) return@LaunchedEffect
+        cameraPreviewSuppressed = false
+        navController.navigateToTabRoot(Route.Camera.value)
+    }
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val scope = rememberCoroutineScope()
-    var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
     var listPeriodKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var listLastMonthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
@@ -146,6 +187,7 @@ private fun AppNav(
                         onClick = {
                             val target = tab.route.value
                             val currentRoute = currentDestination?.route
+                            val onChildScreen = !isTabRoute(currentRoute)
                             val leavingCamera =
                                 currentRoute == Route.Camera.value && target != Route.Camera.value
                             scope.launch {
@@ -153,11 +195,7 @@ private fun AppNav(
                                     cameraPreviewSuppressed = true
                                     try {
                                         delay(CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS)
-                                        navController.navigate(target) {
-                                            popUpTo(Route.Camera.value) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                                        navController.navigateToTabRoot(target)
                                     } finally {
                                         cameraPreviewSuppressed = false
                                     }
@@ -165,10 +203,8 @@ private fun AppNav(
                                     if (target == Route.Camera.value) {
                                         cameraPreviewSuppressed = false
                                     }
-                                    navController.navigate(target) {
-                                        popUpTo(Route.Camera.value) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                    if (onChildScreen || currentRoute != target) {
+                                        navController.navigateToTabRoot(target)
                                     }
                                 }
                             }
