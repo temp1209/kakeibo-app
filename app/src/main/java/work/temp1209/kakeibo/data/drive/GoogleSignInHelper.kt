@@ -1,5 +1,7 @@
 package work.temp1209.kakeibo.data.drive
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 
@@ -12,4 +14,7 @@ object GoogleSignInHelper {
             .requestEmail()
             .requestScopes(Scope(DRIVE_APPDATA_SCOPE))
             .build()
+
+    fun hasDriveAppDataScope(account: GoogleSignInAccount): Boolean =
+        GoogleSignIn.hasPermissions(account, Scope(DRIVE_APPDATA_SCOPE))
 }

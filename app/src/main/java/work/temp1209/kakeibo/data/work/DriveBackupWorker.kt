@@ -7,7 +7,11 @@ import androidx.work.WorkerParameters
 import com.google.android.gms.auth.GoogleAuthException
 import com.google.android.gms.auth.UserRecoverableAuthException
 import work.temp1209.kakeibo.data.drive.DriveBackupOrchestrator
+import work.temp1209.kakeibo.data.drive.DriveBackupUserMessages
 import work.temp1209.kakeibo.data.drive.DriveHttpException
+import work.temp1209.kakeibo.data.drive.LocalBackupEmptyException
+import work.temp1209.kakeibo.data.drive.BackupRegressionException
+import work.temp1209.kakeibo.data.prefs.DriveBackupPrefs
 import java.io.IOException
 
 class DriveBackupWorker(
@@ -28,20 +32,40 @@ class DriveBackupWorker(
         }
     }
 
-    private fun mapFailureToWorkResult(e: Throwable?): Result {
+    private suspend fun mapFailureToWorkResult(e: Throwable?): Result {
         val err = e ?: return Result.retry()
-        Log.w(TAG, "Drive backup: ${err.message}", err)
+        logDriveError(err)
         return when (err) {
+            is LocalBackupEmptyException,
+            is BackupRegressionException,
+            -> Result.success()
             is UserRecoverableAuthException,
             is GoogleAuthException,
-            -> Result.success()
+            -> {
+                DriveBackupPrefs(applicationContext).setLastBackupError(
+                    DriveBackupUserMessages.snackbarMessage(err),
+                )
+                Result.failure()
+            }
             is DriveHttpException -> when (err.httpCode) {
-                401, 403 -> Result.success()
+                401, 403 -> Result.failure()
                 429, in 500..599 -> Result.retry()
-                else -> Result.success()
+                else -> Result.failure()
             }
             is IOException -> Result.retry()
             else -> Result.retry()
+        }
+    }
+
+    private fun logDriveError(err: Throwable) {
+        if (err is DriveHttpException) {
+            Log.w(
+                TAG,
+                "Drive backup HTTP ${err.httpCode}: ${err.responseBody ?: err.message}",
+                err,
+            )
+        } else {
+            Log.w(TAG, "Drive backup: ${err.message}", err)
         }
     }
 

@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -60,6 +62,7 @@ import kotlinx.coroutines.launch
 import java.time.YearMonth
 import work.temp1209.kakeibo.ui.manual.ManualExpenseScreen
 import work.temp1209.kakeibo.data.image.EvidenceImageImporter
+import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 
 /** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
 private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
@@ -158,6 +161,16 @@ private fun AppNav(
     var listLastMonthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
 
     var addExpenseSheetOpen by remember { mutableStateOf(false) }
+    var showApiKeyMissingDialog by remember { mutableStateOf(false) }
+    val apiKeyStore = remember { GeminiApiKeyStore(context) }
+
+    fun confirmPreviewOrShowApiKeyDialog(onConfirmed: () -> Unit) {
+        if (apiKeyStore.hasKey()) {
+            onConfirmed()
+        } else {
+            showApiKeyMissingDialog = true
+        }
+    }
 
     fun setPreviewInputKind(kind: String) {
         navController.currentBackStackEntry?.savedStateHandle?.set("previewInputKind", kind)
@@ -234,6 +247,29 @@ private fun AppNav(
             )
         }
 
+        if (showApiKeyMissingDialog) {
+            AlertDialog(
+                onDismissRequest = { showApiKeyMissingDialog = false },
+                title = { androidx.compose.material3.Text("APIキーが必要") },
+                text = { androidx.compose.material3.Text(GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showApiKeyMissingDialog = false
+                            navController.navigateToTabRoot(Route.Settings.value)
+                        },
+                    ) {
+                        androidx.compose.material3.Text("設定へ")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showApiKeyMissingDialog = false }) {
+                        androidx.compose.material3.Text("キャンセル")
+                    }
+                },
+            )
+        }
+
         NavHost(
             navController = navController,
             startDestination = Route.Camera.value,
@@ -287,8 +323,9 @@ private fun AppNav(
                     imageUri = imageUri,
                     onCancel = { navController.popBackStack() },
                     onConfirm = {
-                        // 二重保存防止: 1回押したら無視（UI側の無効化は後で追加してもOK）
-                        if (!saving) saving = true
+                        confirmPreviewOrShowApiKeyDialog {
+                            if (!saving) saving = true
+                        }
                     },
                 )
 
@@ -334,7 +371,11 @@ private fun AppNav(
                             navController.popBackStack()
                         }
                     },
-                    onConfirm = { if (!saving) saving = true },
+                    onConfirm = {
+                        confirmPreviewOrShowApiKeyDialog {
+                            if (!saving) saving = true
+                        }
+                    },
                 )
 
                 if (saving) {

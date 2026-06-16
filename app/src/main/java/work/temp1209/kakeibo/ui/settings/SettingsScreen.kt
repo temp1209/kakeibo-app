@@ -36,7 +36,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.drive.DriveBackupOrchestrator
+import work.temp1209.kakeibo.data.drive.DriveBackupUserMessages
+import work.temp1209.kakeibo.data.drive.DriveBackupRepository
 import work.temp1209.kakeibo.data.drive.GoogleSignInHelper
+import work.temp1209.kakeibo.data.drive.LocalBackupEmptyException
+import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.DriveBackupPrefs
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
@@ -60,11 +64,41 @@ fun SettingsScreen(
 
     var driveEmail by remember { mutableStateOf<String?>(null) }
     var lastDriveBackup by remember { mutableStateOf<String?>(null) }
+    var lastDriveBackupError by remember { mutableStateOf<String?>(null) }
     var backingUp by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(false) }
+    var showDriveReLoginDialog by remember { mutableStateOf(false) }
+    var driveReLoginHint by remember { mutableStateOf<String?>(null) }
+    var showRestorePromptDialog by remember { mutableStateOf(false) }
 
     val signInClient = remember(activity) {
         GoogleSignIn.getClient(activity, GoogleSignInHelper.signInOptions())
+    }
+
+    suspend fun refreshDriveStatus() {
+        driveEmail = GoogleSignIn.getLastSignedInAccount(activity)?.email ?: drivePrefs.accountEmailOrNull()
+        lastDriveBackup = drivePrefs.lastBackupAtOrNull()
+        lastDriveBackupError = drivePrefs.lastBackupErrorOrNull()
+    }
+
+    suspend fun handleDriveBackupFailure(error: Throwable) {
+        val message = DriveBackupUserMessages.snackbarMessage(error)
+        snackbarHostState.showSnackbar(message = message, withDismissAction = true)
+        lastDriveBackupError = message
+        if (DriveBackupUserMessages.suggestsRestore(error)) {
+            showRestorePromptDialog = true
+            return
+        }
+        if (DriveBackupUserMessages.suggestsReLogin(error)) {
+            driveReLoginHint = DriveBackupUserMessages.recoveryHint(error)
+            showDriveReLoginDialog = true
+        }
+    }
+
+    suspend fun signOutDrive() {
+        signInClient.signOut()
+        drivePrefs.setAccountEmail(null)
+        driveEmail = null
     }
 
     val signInLauncher = rememberLauncherForActivityResult(
@@ -75,14 +109,30 @@ fun SettingsScreen(
             scope.launch {
                 drivePrefs.setAccountEmail(acc.email)
                 driveEmail = acc.email
-                val r = withContext(Dispatchers.IO) {
-                    DriveBackupOrchestrator.runScheduledBackup(activity)
+                if (!GoogleSignInHelper.hasDriveAppDataScope(acc)) {
+                    handleDriveBackupFailure(
+                        IllegalStateException("drive.appdata スコープが付与されていません"),
+                    )
+                    return@launch
+                }
+                val dao = AppDatabase.get(activity).receiptDao()
+                val localCount = withContext(Dispatchers.IO) { dao.countActiveReceipts() }
+                val hasRemote = withContext(Dispatchers.IO) {
+                    val token = DriveBackupRepository.getAccessToken(activity, acc)
+                    DriveBackupRepository.hasBackupFiles(token)
                 }
                 snackbarHostState.showSnackbar(
-                    message = if (r.isSuccess) "Googleドライブに接続し、バックアップしました" else "バックアップ失敗: ${r.exceptionOrNull()?.message}",
+                    message = if (hasRemote && localCount == 0) {
+                        "Googleドライブに接続しました。データを戻すには復元を実行してください。"
+                    } else {
+                        "Googleドライブに接続しました"
+                    },
                     withDismissAction = true,
                 )
-                lastDriveBackup = drivePrefs.lastBackupAtOrNull()
+                if (hasRemote && localCount == 0) {
+                    showRestorePromptDialog = true
+                }
+                refreshDriveStatus()
             }
         }
         task.addOnFailureListener { e ->
@@ -96,9 +146,12 @@ fun SettingsScreen(
         }
     }
 
+    fun launchDriveSignIn() {
+        signInLauncher.launch(signInClient.signInIntent)
+    }
+
     LaunchedEffect(Unit) {
-        driveEmail = GoogleSignIn.getLastSignedInAccount(activity)?.email ?: drivePrefs.accountEmailOrNull()
-        lastDriveBackup = drivePrefs.lastBackupAtOrNull()
+        refreshDriveStatus()
     }
 
     Column(
@@ -184,9 +237,15 @@ fun SettingsScreen(
             "接続アカウント: ${driveEmail ?: "未接続"}",
         )
         Text("最終バックアップ: ${lastDriveBackup ?: "—"}")
+        if (!lastDriveBackupError.isNullOrBlank()) {
+            Text(
+                text = "直近のバックアップエラー: $lastDriveBackupError",
+                color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+            )
+        }
 
         Button(
-            onClick = { signInLauncher.launch(signInClient.signInIntent) },
+            onClick = { launchDriveSignIn() },
         ) {
             Text("Googleでログインしてバックアップ")
         }
@@ -194,9 +253,7 @@ fun SettingsScreen(
         Button(
             onClick = {
                 scope.launch {
-                    signInClient.signOut()
-                    drivePrefs.setAccountEmail(null)
-                    driveEmail = null
+                    signOutDrive()
                     snackbarHostState.showSnackbar("ログアウトしました", withDismissAction = true)
                 }
             },
@@ -208,16 +265,34 @@ fun SettingsScreen(
         Button(
             onClick = {
                 if (backingUp) return@Button
+                val account = GoogleSignIn.getLastSignedInAccount(activity)
+                if (account == null) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "先にGoogleでログインしてください",
+                            withDismissAction = true,
+                        )
+                    }
+                    return@Button
+                }
+                if (!GoogleSignInHelper.hasDriveAppDataScope(account)) {
+                    scope.launch {
+                        driveReLoginHint = DriveBackupUserMessages.RELOGIN_HINT
+                        showDriveReLoginDialog = true
+                    }
+                    return@Button
+                }
                 backingUp = true
                 scope.launch {
                     val r = withContext(Dispatchers.IO) {
                         DriveBackupOrchestrator.runScheduledBackup(activity)
                     }
-                    snackbarHostState.showSnackbar(
-                        if (r.isSuccess) "バックアップ完了" else "失敗: ${r.exceptionOrNull()?.message}",
-                        withDismissAction = true,
-                    )
-                    lastDriveBackup = drivePrefs.lastBackupAtOrNull()
+                    if (r.isSuccess) {
+                        snackbarHostState.showSnackbar("バックアップ完了", withDismissAction = true)
+                    } else {
+                        handleDriveBackupFailure(r.exceptionOrNull() ?: IllegalStateException("不明なエラー"))
+                    }
+                    refreshDriveStatus()
                     backingUp = false
                 }
             },
@@ -244,10 +319,18 @@ fun SettingsScreen(
                                 }
                             }
                         } else {
-                            "復元失敗: ${r.exceptionOrNull()?.message}"
+                            val err = r.exceptionOrNull() ?: IllegalStateException("不明なエラー")
+                            "復元失敗: ${DriveBackupUserMessages.snackbarMessage(err)}"
                         },
                         withDismissAction = true,
                     )
+                    if (r.isFailure) {
+                        val err = r.exceptionOrNull()
+                        if (err != null && DriveBackupUserMessages.suggestsReLogin(err)) {
+                            driveReLoginHint = DriveBackupUserMessages.recoveryHint(err)
+                            showDriveReLoginDialog = true
+                        }
+                    }
                     restoring = false
                 }
             },
@@ -255,6 +338,81 @@ fun SettingsScreen(
         ) {
             Text(if (restoring) "復元中…" else "Driveから復元（マージ）")
         }
+    }
+
+    if (showRestorePromptDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestorePromptDialog = false },
+            title = { Text("Driveから復元しますか？") },
+            text = {
+                Text(
+                    "ローカルにレシートがありません。ログイン時に自動バックアップは行いません。" +
+                        "Driveに保存済みのデータがあれば、復元で戻せます。",
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestorePromptDialog = false
+                        if (restoring) return@Button
+                        restoring = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) {
+                                DriveBackupOrchestrator.restoreMergeFromDrive(activity)
+                            }
+                            snackbarHostState.showSnackbar(
+                                if (r.isSuccess) {
+                                    val s = r.getOrNull()
+                                    buildString {
+                                        append("復元マージ完了（反映 ${s?.receiptsApplied}件、スキップ ${s?.receiptsSkipped}件）")
+                                        if ((s?.jsonParseFailures ?: 0) > 0) {
+                                            append("、JSON無効 ${s?.jsonParseFailures}件")
+                                        }
+                                    }
+                                } else {
+                                    val err = r.exceptionOrNull() ?: IllegalStateException("不明なエラー")
+                                    "復元失敗: ${DriveBackupUserMessages.snackbarMessage(err)}"
+                                },
+                                withDismissAction = true,
+                            )
+                            restoring = false
+                        }
+                    },
+                ) { Text("復元する") }
+            },
+            dismissButton = {
+                Button(onClick = { showRestorePromptDialog = false }) { Text("あとで") }
+            },
+        )
+    }
+
+    if (showDriveReLoginDialog) {
+        AlertDialog(
+            onDismissRequest = { showDriveReLoginDialog = false },
+            title = { Text("Drive権限エラー") },
+            text = {
+                Text(
+                    buildString {
+                        append(driveReLoginHint ?: DriveBackupUserMessages.RELOGIN_HINT)
+                        append("\n\n一度ログアウトしてから再ログインすると、drive.appdata の許可を再度求められます。")
+                    },
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDriveReLoginDialog = false
+                        scope.launch {
+                            signOutDrive()
+                            launchDriveSignIn()
+                        }
+                    },
+                ) { Text("再ログイン") }
+            },
+            dismissButton = {
+                Button(onClick = { showDriveReLoginDialog = false }) { Text("閉じる") }
+            },
+        )
     }
 
     if (showOverwriteConfirm) {

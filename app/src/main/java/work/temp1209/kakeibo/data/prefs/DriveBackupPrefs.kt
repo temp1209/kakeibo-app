@@ -15,6 +15,8 @@ class DriveBackupPrefs(private val context: Context) {
     private val ds = context.driveBackupDataStore
 
     private val keyLastBackupAt = stringPreferencesKey("last_backup_at")
+    private val keyLastBackupError = stringPreferencesKey("last_backup_error")
+    private val keyLastBackupErrorAt = stringPreferencesKey("last_backup_error_at")
     private val keyMonthJobYm = stringPreferencesKey("month_job_year_month")
     private val keyAccountEmail = stringPreferencesKey("account_email")
 
@@ -24,6 +26,24 @@ class DriveBackupPrefs(private val context: Context) {
 
     suspend fun lastBackupAtOrNull(): String? =
         ds.data.map { it[keyLastBackupAt] }.first()
+
+    suspend fun setLastBackupError(message: String?) {
+        ds.edit {
+            if (message == null) {
+                it.remove(keyLastBackupError)
+                it.remove(keyLastBackupErrorAt)
+            } else {
+                it[keyLastBackupError] = message
+                it[keyLastBackupErrorAt] = java.time.Instant.now().toString()
+            }
+        }
+    }
+
+    suspend fun lastBackupErrorOrNull(): String? =
+        ds.data.map { it[keyLastBackupError] }.first()
+
+    suspend fun lastBackupErrorAtOrNull(): String? =
+        ds.data.map { it[keyLastBackupErrorAt] }.first()
 
     suspend fun setLastMonthJobYearMonth(ym: String) {
         ds.edit { it[keyMonthJobYm] = ym }

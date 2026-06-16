@@ -7,4 +7,5 @@ package work.temp1209.kakeibo.data.drive
 class DriveHttpException(
     val httpCode: Int,
     message: String,
+    val responseBody: String? = null,
 ) : Exception(message)

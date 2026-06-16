@@ -19,11 +19,6 @@ import java.time.YearMonth
 
 object DriveBackupOrchestrator {
 
-    private const val CURRENT_MONTH_FILE = "current-month.json"
-
-    private fun fullSnapshotFileName(ym: YearMonth): String =
-        "full-${ym.year}-${ym.monthValue.toString().padStart(2, '0')}-01.json"
-
     suspend fun runScheduledBackup(context: Context): Result<Unit> {
         val account = GoogleSignIn.getLastSignedInAccount(context) ?: return Result.success(Unit)
         return runWithAccount(context, account)
@@ -31,28 +26,49 @@ object DriveBackupOrchestrator {
 
     suspend fun runWithAccount(context: Context, account: GoogleSignInAccount): Result<Unit> =
         withContext(Dispatchers.IO) {
+            val prefs = DriveBackupPrefs(context)
             runCatching {
                 val token = DriveBackupRepository.getAccessToken(context, account)
                 val dao = AppDatabase.get(context).receiptDao()
-                val prefs = DriveBackupPrefs(context)
+                val localCount = dao.countActiveReceipts()
+                val remoteExists = DriveBackupRepository.hasBackupFiles(token)
+
+                if (localCount == 0) {
+                    if (remoteExists) {
+                        throw LocalBackupEmptyException(remoteBackupExists = true)
+                    }
+                    return@runCatching
+                }
+
                 val zone = ZoneId.systemDefault()
                 val nowYm = YearMonth.now(zone)
+                val all = dao.listAllReceiptsForExport()
+                var manifest = DriveBackupRepository.readManifest(token)
+                    ?: BackupManifest(updatedAt = Instant.now().toString())
 
                 val lastJobYm = prefs.lastMonthJobYearMonthOrNull()
-                if (lastJobYm != nowYm.toString()) {
-                    runMonthBoundary(context, token, dao, nowYm, zone)
+                if (lastJobYm != nowYm.toString() && all.isNotEmpty()) {
+                    manifest = runMonthBoundary(context, token, dao, nowYm, zone, localCount, manifest)
+                    DriveBackupRepository.writeManifest(token, manifest)
+                    prefs.setLastMonthJobYearMonth(nowYm.toString())
+                } else if (lastJobYm != nowYm.toString()) {
                     prefs.setLastMonthJobYearMonth(nowYm.toString())
                 }
 
                 val (start, end) = BackupExportBuilder.currentMonthWindow(zone)
-                val all = dao.listAllReceiptsForExport()
                 val monthReceipts = all.filter { r ->
-                    val t = BackupExportBuilder.receiptTimestamp(r) ?: return@filter false
-                    !t.isBefore(start) && !t.isAfter(end)
+                    BackupExportBuilder.isInCurrentMonthExport(r, start, end)
                 }
+                val monthActiveCount = monthReceipts.count { it.deletedAt == null }
+                BackupSafetyGuard.assertSafeToUpload(
+                    token = token,
+                    localActiveCount = localCount,
+                    exportActiveCount = monthActiveCount,
+                )
+
                 val ids = monthReceipts.map { it.receiptId }.toSet()
                 val monthItems = ids.flatMap { rid -> dao.listReceiptItems(rid) }
-                val cur = BackupExportBuilder.buildFile(
+                val curFile = BackupExportBuilder.buildFile(
                     context = context,
                     exportType = BackupExportTypes.CURRENT_MONTH,
                     rangeStart = start,
@@ -60,11 +76,26 @@ object DriveBackupOrchestrator {
                     receipts = monthReceipts,
                     items = monthItems,
                 )
-                DriveBackupRepository.uploadOrReplaceJson(token, CURRENT_MONTH_FILE, BackupJsonCodec.toJson(cur))
+                val curName = SnapshotFileNames.forExport(BackupExportTypes.CURRENT_MONTH)
+                val curJson = BackupJsonCodec.toJson(curFile)
+                val curId = DriveBackupRepository.uploadImmutableSnapshot(token, curName, curJson)
+
+                manifest = manifest.copy(
+                    updatedAt = Instant.now().toString(),
+                    currentMonth = curFile.toManifestRef(curId, curName),
+                )
+
+                DriveBackupRepository.writeManifest(token, manifest)
+                DriveBackupRepository.pruneUnreferenced(token, manifest.allReferencedFileIds())
+
                 prefs.setLastBackupAt(Instant.now().toString())
+                prefs.setLastBackupError(null)
             }.fold(
                 onSuccess = { Result.success(Unit) },
-                onFailure = { Result.failure(it) },
+                onFailure = { e ->
+                    prefs.setLastBackupError(DriveBackupUserMessages.snackbarMessage(e))
+                    Result.failure(e)
+                },
             )
         }
 
@@ -74,28 +105,50 @@ object DriveBackupOrchestrator {
         dao: ReceiptDao,
         nowYm: YearMonth,
         zone: ZoneId,
-    ) {
-        val archiveYm = nowYm.minusMonths(2)
-        val archReceipts = dao.listAllReceiptsForExport()
-            .filter { BackupExportBuilder.isReceiptInClosedMonth(it, archiveYm, zone) }
-        val archItems = archReceipts.flatMap { dao.listReceiptItems(it.receiptId) }
-        val archStart = archiveYm.atDay(1).atStartOfDay(zone).toInstant()
-        val archEnd = archiveYm.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant()
-        val archFile = BackupExportBuilder.buildFile(
-            context = context,
-            exportType = BackupExportTypes.ARCHIVE_MONTH,
-            rangeStart = archStart,
-            rangeEnd = archEnd,
-            receipts = archReceipts,
-            items = archItems,
-        )
-        DriveBackupRepository.uploadOrReplaceJson(
-            token,
-            "archive-${archiveYm}.json",
-            BackupJsonCodec.toJson(archFile),
+        localActiveCount: Int,
+        manifest: BackupManifest,
+    ): BackupManifest {
+        val allR = dao.listAllReceiptsForExport()
+        BackupSafetyGuard.assertSafeToUpload(
+            token = token,
+            localActiveCount = localActiveCount,
+            exportActiveCount = allR.count { it.deletedAt == null },
         )
 
-        val allR = dao.listAllReceiptsForExport()
+        var updated = manifest
+
+        val archiveYm = nowYm.minusMonths(2)
+        val archReceipts = allR.filter { BackupExportBuilder.isReceiptInClosedMonth(it, archiveYm, zone) }
+        if (archReceipts.isNotEmpty()) {
+            val archItems = archReceipts.flatMap { dao.listReceiptItems(it.receiptId) }
+            val archStart = archiveYm.atDay(1).atStartOfDay(zone).toInstant()
+            val archEnd = archiveYm.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant()
+            val archFile = BackupExportBuilder.buildFile(
+                context = context,
+                exportType = BackupExportTypes.ARCHIVE_MONTH,
+                rangeStart = archStart,
+                rangeEnd = archEnd,
+                receipts = archReceipts,
+                items = archItems,
+            )
+            val ymKey = archiveYm.toString()
+            val archName = SnapshotFileNames.forExport(BackupExportTypes.ARCHIVE_MONTH, "-$ymKey")
+            val archId = DriveBackupRepository.uploadImmutableSnapshot(
+                token,
+                archName,
+                BackupJsonCodec.toJson(archFile),
+            )
+            val archRef = ManifestArchiveRef(
+                yearMonth = ymKey,
+                fileId = archId,
+                fileName = archName,
+                activeReceiptCount = archFile.data.receipts.count { it.deletedAt == null },
+            )
+            updated = updated.copy(
+                archives = updated.archives.filter { it.yearMonth != ymKey } + archRef,
+            )
+        }
+
         val allI = allR.flatMap { dao.listReceiptItems(it.receiptId) }
         val earliest = allR.mapNotNull { runCatching { Instant.parse(it.createdAt) }.getOrNull() }.minOrNull()
             ?: Instant.EPOCH
@@ -107,18 +160,19 @@ object DriveBackupOrchestrator {
             receipts = allR,
             items = allI,
         )
-        DriveBackupRepository.uploadOrReplaceJson(token, fullSnapshotFileName(nowYm), BackupJsonCodec.toJson(fullFile))
+        val fullName = SnapshotFileNames.forExport(BackupExportTypes.FULL_SNAPSHOT)
+        val fullId = DriveBackupRepository.uploadImmutableSnapshot(
+            token,
+            fullName,
+            BackupJsonCodec.toJson(fullFile),
+        )
+        val fullRef = fullFile.toManifestRef(fullId, fullName)
 
-        pruneFullSnapshots(token)
-    }
-
-    private suspend fun pruneFullSnapshots(token: String) {
-        val files = DriveBackupRepository.listJsonFiles(token)
-            .filter { it.name.startsWith("full-") && it.name.endsWith(".json") }
-            .sortedByDescending { it.modifiedTimeMs }
-        files.drop(2).forEach { f ->
-            DriveBackupRepository.deleteById(token, f.id)
-        }
+        return updated.copy(
+            updatedAt = Instant.now().toString(),
+            previousFullSnapshot = updated.fullSnapshot,
+            fullSnapshot = fullRef,
+        )
     }
 
     suspend fun restoreMergeFromDrive(context: Context): Result<BackupMerge.MergeStats> = withContext(Dispatchers.IO) {
@@ -126,30 +180,34 @@ object DriveBackupOrchestrator {
             val account = GoogleSignIn.getLastSignedInAccount(context)
                 ?: throw IllegalStateException("Googleにログインしていません")
             val token = DriveBackupRepository.getAccessToken(context, account)
-            val db = AppDatabase.get(context)
-            val dao = db.receiptDao()
-            val files = DriveBackupRepository.listJsonFiles(token)
+            val manifest = DriveBackupRepository.readManifest(token)
+                ?: throw IllegalStateException("Drive上に manifest.json が見つかりません。バックアップが未作成か、旧形式のみの可能性があります。")
+
             val bodies = mutableListOf<String>()
 
-            files.filter { it.name.startsWith("full-") && it.name.endsWith(".json") }
-                .sortedBy { it.modifiedTimeMs }
-                .forEach { f ->
-                    DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
-                }
-
-            files.filter { it.name.startsWith("archive-") && it.name.endsWith(".json") }
-                .sortedBy { it.name }
-                .forEach { f ->
-                    DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
-                }
-
-            files.find { it.name == CURRENT_MONTH_FILE }?.let { f ->
-                DriveBackupRepository.downloadUtf8(token, f.id)?.let { bodies.add(it) }
+            manifest.previousFullSnapshot?.let { ref ->
+                bodies += DriveBackupRepository.downloadRequired(token, ref.fileId, "前回フルスナップショット")
+            }
+            manifest.fullSnapshot?.let { ref ->
+                bodies += DriveBackupRepository.downloadRequired(token, ref.fileId, "フルスナップショット")
+            }
+            manifest.archives.sortedBy { it.yearMonth }.forEach { ref ->
+                bodies += DriveBackupRepository.downloadRequired(
+                    token,
+                    ref.fileId,
+                    "アーカイブ ${ref.yearMonth}",
+                )
+            }
+            manifest.currentMonth?.let { ref ->
+                bodies += DriveBackupRepository.downloadRequired(token, ref.fileId, "当月スナップショット")
             }
 
             if (bodies.isEmpty()) {
-                throw IllegalStateException("Drive上にバックアップJSONが見つかりません")
+                throw IllegalStateException("manifest に有効なスナップショット参照がありません")
             }
+
+            val db = AppDatabase.get(context)
+            val dao = db.receiptDao()
             db.withTransaction {
                 BackupMerge.mergeFilesIntoDb(dao, bodies)
             }
