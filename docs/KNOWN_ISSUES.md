@@ -1,7 +1,7 @@
 # 既知の課題・バックログ（実利用フィードバック）
 
 実機利用や開発中に気づいた、**未対応または要件に未明文化**の項目を集約する。  
-実装タスクの詳細は [`IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](IMPLEMENTATION_PLAN_REVISED_2026-06-12.md) の **Phase 7** を参照。
+実装タスクの詳細は [`IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](IMPLEMENTATION_PLAN_REVISED_2026-06-16.md) の **Phase 7** を参照。
 
 最終更新: 2026-06-16
 
@@ -109,6 +109,6 @@ val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull() ?: return Res
 
 ## 参照
 
-- 実装計画 Phase 7: `IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`
+- 実装計画 Phase 7: `IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`
 - 外部サービス・SHA-1: `EXTERNAL_SETUP.md`
 - Drive 403 調査: `DEBUGGING_GUIDE.md` §8

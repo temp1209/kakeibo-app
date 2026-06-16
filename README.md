@@ -111,7 +111,8 @@ flowchart LR
 | ドキュメント | 内容 |
 |-------------|------|
 | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | 要件定義（UX・データモデル・カテゴリ体系） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md) | 実装計画（1か月フィードバック反映・最新） |
+| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md) | 実装計画（Phase 6 完了・Phase 7 着手・最新） |
+| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md) | Phase 6 定義（完了・アーカイブ） |
 | [`docs/IMPLEMENTATION_PLAN_REVISED_2026-04-26.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-04-26.md) | Phase 1〜5 の到達点・完了状況 |
 | [`docs/DEBUGGING_GUIDE.md`](docs/DEBUGGING_GUIDE.md) | 実機デバッグ・再現性確保の手順 |
 | [`docs/EXTERNAL_SETUP.md`](docs/EXTERNAL_SETUP.md) | Gemini / Google Drive の外部サービス設定 |
@@ -142,15 +143,17 @@ flowchart LR
 
 ## ロードマップ
 
-実装計画（[`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md)）に基づく、直近の改善項目です。1か月の実利用フィードバックを反映しています。
+実装計画（[`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md)）に基づく、直近の改善項目です。
 
-### Phase 6: 実利用フィードバック対応（進行中）
+### Phase 6: 実利用フィードバック対応（完了）
 
-- [ ] **ナビゲーション修正** — ランチャー再起動時は常にカメラタブ、タブ切替で子画面を pop
-- [ ] **解析失敗の手動再送信** — 自動リトライを廃止し、ユーザーが能動的に再送信
-- [ ] **修正画面の本格化** — レシート画像を見ながら品目の追加・編集（手入力追加と同等 UI）
-- [ ] **無駄遣い度（necessityScore）基準の明確化** — プロンプト改訂による AI 判定精度の改善
-- [ ] **通知アイコンの修正** — ステータスバー表示の改善
+- [x] ナビゲーション修正、通知アイコン、手動再送信、修正画面本格化、necessityScore 基準明確化
+
+### Phase 7: 実利用で顕在化したギャップ（進行予定）
+
+- [ ] **APIキー未設定時の送信ガード** — プレビュー + Worker
+- [ ] **Drive バックアップ 403** — 環境切り分け・エラー表示改善
+- [ ] **初回オンボーディング** — ウィザード・権限・APIキー誘導
 
 ### Phase 5 残タスク
 
