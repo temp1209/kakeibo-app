@@ -109,7 +109,18 @@ object ReceiptJsonSchema {
                     .put("lineTotalYen", JSONObject().put("type", "integer").put("minimum", 0))
                     .put("categoryMajor", JSONObject().put("type", "string").put("enum", categoryMajorEnum))
                     .put("categoryMinor", JSONObject().put("type", "string").put("enum", categoryMinorEnum))
-                    .put("necessityScore", JSONObject().put("type", "integer").put("minimum", 0).put("maximum", 100))
+                    .put(
+                        "necessityScore",
+                        JSONObject()
+                            .put("type", "integer")
+                            .put("minimum", 0)
+                            .put("maximum", 100)
+                            .put(
+                                "description",
+                                "生活維持への必要性（0=娯楽・裁量寄り、100=必須寄り）。店舗種別ではなく商品の用途で判定。" +
+                                    "集計の二値化境界は50（≥50=必須寄り、<50=裁量寄り）。",
+                            ),
+                    )
                     .put("confidence", JSONObject().put("type", "number").put("minimum", 0).put("maximum", 1)),
             )
             .put(

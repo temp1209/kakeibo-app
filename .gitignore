@@ -38,3 +38,5 @@ google-services.json
 # Secrets
 *.env
 
+# Dev device data pulls (see scripts/dev-pull-device-data.ps1)
+backups/

@@ -1,5 +1,7 @@
 package work.temp1209.kakeibo.ui.review
 
+import android.app.TimePickerDialog
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,13 +10,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,12 +31,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,15 +42,60 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.db.ReceiptEntity
+import work.temp1209.kakeibo.data.db.ReceiptImageEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.domain.CategoryCatalog
 import work.temp1209.kakeibo.data.domain.PaymentMethodCatalog
-import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
+import work.temp1209.kakeibo.ui.common.ExpenseLineEditorCard
+import work.temp1209.kakeibo.ui.common.ExpenseLineState
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+
+private data class EditableLine(
+    val itemId: String?,
+    val confidence: Double,
+    val state: ExpenseLineState,
+)
+
+private fun parseReceiptDatetime(raw: String?, zone: ZoneId): Pair<LocalDate, LocalTime> {
+    if (raw.isNullOrBlank()) return LocalDate.now(zone) to LocalTime.now(zone).withSecond(0).withNano(0)
+    val instant = runCatching { Instant.parse(raw.trim()) }.getOrNull()
+        ?: runCatching { OffsetDateTime.parse(raw.trim()).toInstant() }.getOrNull()
+    val zdt = if (instant != null) {
+        instant.atZone(zone)
+    } else {
+        runCatching { LocalDate.parse(raw.trim()).atStartOfDay(zone) }.getOrElse {
+            ZonedDateTime.now(zone)
+        }
+    }
+    return zdt.toLocalDate() to zdt.toLocalTime().withSecond(0).withNano(0)
+}
+
+private fun ReceiptItemEntity.toEditableLine(): EditableLine =
+    EditableLine(
+        itemId = itemId,
+        confidence = confidence,
+        state = ExpenseLineState(
+            itemName = itemName,
+            quantityText = quantity.toString(),
+            lineTotalText = lineTotalYen.toString(),
+            categoryMajor = categoryMajor,
+            categoryMinor = categoryMinor,
+            necessityScore = necessityScore,
+        ),
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,33 +106,64 @@ fun ReceiptReviewScreen(
     onBack: () -> Unit,
     onSaved: () -> Unit,
 ) {
-    var loading by remember(receiptId) { mutableStateOf(true) }
-    var baseReceipt by remember(receiptId) { mutableStateOf<ReceiptEntity?>(null) }
-    var items by remember(receiptId) { mutableStateOf<List<ReceiptItemEntity>>(emptyList()) }
-
-    var merchant by remember(receiptId) { mutableStateOf("") }
-    var receiptDatetime by remember(receiptId) { mutableStateOf("") }
-    var totalText by remember(receiptId) { mutableStateOf("") }
-    var paymentCode by remember(receiptId) { mutableStateOf("UNKNOWN") }
-    var paymentMenu by remember { mutableStateOf(false) }
-
-    var errorText by remember(receiptId) { mutableStateOf<String?>(null) }
+    val zone = remember { ZoneId.systemDefault() }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scroll = rememberScrollState()
+
+    var loading by remember(receiptId) { mutableStateOf(true) }
+    var baseReceipt by remember(receiptId) { mutableStateOf<ReceiptEntity?>(null) }
+    var image by remember(receiptId) { mutableStateOf<ReceiptImageEntity?>(null) }
+    var imageExpanded by remember(receiptId) { mutableStateOf(true) }
+
+    var date by remember(receiptId) { mutableStateOf(LocalDate.now(zone)) }
+    var time by remember(receiptId) { mutableStateOf(LocalTime.now(zone).withSecond(0).withNano(0)) }
+    var merchant by remember(receiptId) { mutableStateOf("") }
+    var totalText by remember(receiptId) { mutableStateOf("") }
+    var paymentCode by remember(receiptId) { mutableStateOf("UNKNOWN") }
+    var paymentServiceName by remember(receiptId) { mutableStateOf("") }
+    var paymentMenu by remember { mutableStateOf(false) }
+    var lines by remember(receiptId) { mutableStateOf<List<EditableLine>>(emptyList()) }
+
+    var errorText by remember(receiptId) { mutableStateOf<String?>(null) }
+    var pendingDeleteIndex by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(receiptId) {
         loading = true
         try {
             val r = repo.getReceiptOrNull(receiptId)
             baseReceipt = r
+            image = repo.getReceiptImage(receiptId)
             if (r != null) {
-                items = repo.listReceiptItems(receiptId)
+                val (d, t) = parseReceiptDatetime(r.receiptDatetime, zone)
+                date = d
+                time = t
                 merchant = r.merchantName.orEmpty()
-                receiptDatetime = r.receiptDatetime.orEmpty()
                 totalText = r.totalAmountYen?.toString().orEmpty()
                 paymentCode = r.paymentMethod?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+                paymentServiceName = r.paymentServiceName.orEmpty()
+                lines = repo.listReceiptItems(receiptId)
+                    .filter { it.isAdjustment == 0 }
+                    .sortedBy { it.lineIndex }
+                    .map { it.toEditableLine() }
+                    .ifEmpty {
+                        listOf(
+                            EditableLine(
+                                itemId = null,
+                                confidence = 1.0,
+                                state = ExpenseLineState(
+                                    itemName = "",
+                                    quantityText = "1",
+                                    lineTotalText = "",
+                                    categoryMajor = "FOOD",
+                                    categoryMinor = CategoryCatalog.minorsFor("FOOD").firstOrNull() ?: "その他",
+                                    necessityScore = 50,
+                                ),
+                            ),
+                        )
+                    }
             } else {
-                items = emptyList()
+                lines = emptyList()
             }
         } finally {
             loading = false
@@ -121,6 +202,38 @@ fun ReceiptReviewScreen(
         return
     }
 
+    if (br.analysisStatus == "PENDING" || br.analysisStatus == "RUNNING") {
+        Column(Modifier.padding(contentPadding).padding(16.dp)) {
+            TextButton(onClick = onBack) { Text("戻る") }
+            Text("解析完了後に修正できます。")
+        }
+        return
+    }
+
+    fun receiptDatetimeIso(): String =
+        date.atTime(time).atZone(zone).toOffsetDateTime().toString()
+
+    pendingDeleteIndex?.let { idx ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteIndex = null },
+            title = { Text("明細行を削除") },
+            text = { Text("${idx + 1}行目を削除しますか？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (lines.size > 1) {
+                            lines = lines.filterIndexed { i, _ -> i != idx }
+                        }
+                        pendingDeleteIndex = null
+                    },
+                ) { Text("削除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteIndex = null }) { Text("キャンセル") }
+            },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -134,7 +247,7 @@ fun ReceiptReviewScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
             }
-            Text("要確認の修正", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("レシート修正", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
 
         Column(
@@ -144,25 +257,103 @@ fun ReceiptReviewScreen(
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("必須項目・支払手段・明細の必須度を入力し、「保存して確定」を押してください。", style = MaterialTheme.typography.bodyMedium)
+            if (image != null && image?.deletedAt == null) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("レシート画像", fontWeight = FontWeight.SemiBold)
+                            IconButton(onClick = { imageExpanded = !imageExpanded }) {
+                                Icon(
+                                    if (imageExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                    contentDescription = if (imageExpanded) "折りたたむ" else "展開",
+                                )
+                            }
+                        }
+                        if (imageExpanded) {
+                            AsyncImage(
+                                model = Uri.parse(image!!.localUri),
+                                contentDescription = "レシート画像",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp)),
+                            )
+                        }
+                    }
+                }
+            }
+
+            Text(
+                "画像を見ながら店名・日時・明細を修正し、「保存」を押してください。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            Text("取引日時", fontWeight = FontWeight.SemiBold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = date.toString(),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("日付") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                )
+                TextButton(
+                    onClick = {
+                        android.app.DatePickerDialog(
+                            context,
+                            { _, y, m, d -> date = LocalDate.of(y, m + 1, d) },
+                            date.year,
+                            date.monthValue - 1,
+                            date.dayOfMonth,
+                        ).show()
+                    },
+                ) { Text("変更") }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = "%02d:%02d".format(time.hour, time.minute),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("時刻") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                )
+                TextButton(
+                    onClick = {
+                        TimePickerDialog(
+                            context,
+                            { _, hh, mm -> time = LocalTime.of(hh, mm) },
+                            time.hour,
+                            time.minute,
+                            true,
+                        ).show()
+                    },
+                ) { Text("変更") }
+            }
 
             OutlinedTextField(
                 value = merchant,
-                onValueChange = { merchant = it },
-                label = { Text("店名") },
+                onValueChange = { merchant = it.take(80) },
+                label = { Text("店名（必須・1〜80）") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
-                value = receiptDatetime,
-                onValueChange = { receiptDatetime = it },
-                label = { Text("取引日時（ISO8601 例: 2026-05-04T12:30:00Z）") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
                 value = totalText,
-                onValueChange = { totalText = it.filter { ch -> ch.isDigit() } },
-                label = { Text("合計金額（円・整数）") },
+                onValueChange = { totalText = it.filter { ch -> ch.isDigit() }.take(12) },
+                label = { Text("合計金額（円・必須）") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
@@ -175,7 +366,7 @@ fun ReceiptReviewScreen(
                     value = PaymentMethodCatalog.label(paymentCode),
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("支払手段") },
+                    label = { Text("支払手段（必須）") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = paymentMenu) },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -194,25 +385,69 @@ fun ReceiptReviewScreen(
                 }
             }
 
-            Text("明細（調整行は集計用）", fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(
+                value = paymentServiceName,
+                onValueChange = { paymentServiceName = it },
+                label = { Text("支払サービス名（任意）") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
 
-            for (line in items.sortedBy { it.lineIndex }) {
-                if (line.isAdjustment == 1) {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("明細（1〜30行）", fontWeight = FontWeight.SemiBold)
+                TextButton(
+                    onClick = {
+                        if (lines.size < 30) {
+                            lines = lines + EditableLine(
+                                itemId = null,
+                                confidence = 1.0,
+                                state = ExpenseLineState(
+                                    itemName = "",
+                                    quantityText = "1",
+                                    lineTotalText = "",
+                                    categoryMajor = "FOOD",
+                                    categoryMinor = CategoryCatalog.minorsFor("FOOD").firstOrNull() ?: "その他",
+                                    necessityScore = 50,
+                                ),
+                            )
+                        }
+                    },
+                    enabled = lines.size < 30,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "追加")
+                    Text("行を追加")
+                }
+            }
+
+            lines.forEachIndexed { idx, line ->
+                ExpenseLineEditorCard(
+                    index = idx,
+                    state = line.state,
+                    onChange = { newState ->
+                        lines = lines.mapIndexed { i, cur ->
+                            if (i == idx) cur.copy(state = newState) else cur
+                        }
+                    },
+                    onRemove = { pendingDeleteIndex = idx },
+                    removeEnabled = lines.size > 1,
+                )
+            }
+
+            val linesSum = lines.sumOf { it.state.lineTotalText.toLongOrNull() ?: 0L }
+            val total = totalText.toLongOrNull()
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("明細合計: ${linesSum}円")
+                    Text("合計金額: ${total ?: 0L}円")
+                    if (total != null && total != linesSum) {
                         Text(
-                            "調整行: ${line.lineTotalYen}円（表示のみ）",
-                            modifier = Modifier.padding(8.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                } else {
-                    val latest = items.first { it.itemId == line.itemId }
-                    key(latest.itemId) {
-                        ItemReviewEditor(
-                            line = latest,
-                            onUpdate = { newItem ->
-                                items = items.map { if (it.itemId == newItem.itemId) newItem else it }
-                            },
+                            "差分 ${total - linesSum}円は保存時に調整行として自動反映されます",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -225,15 +460,35 @@ fun ReceiptReviewScreen(
             Button(
                 onClick = {
                     errorText = null
-                    val total = totalText.toLongOrNull()
-                    val updated = br.copy(
-                        merchantName = merchant.trim().ifBlank { null },
-                        receiptDatetime = receiptDatetime.trim().ifBlank { null },
-                        totalAmountYen = total,
-                        paymentMethod = paymentCode,
-                    )
+                    val totalYen = totalText.toLongOrNull()
+                    if (totalYen == null || totalYen < 0) {
+                        errorText = "合計金額（円）を入力してください"
+                        return@Button
+                    }
                     scope.launch {
-                        val result = repo.applyReceiptReview(updated, items)
+                        val parsedItems = lines.map { line ->
+                            ReceiptRepository.ReceiptEditItemInput(
+                                itemId = line.itemId,
+                                itemName = line.state.itemName.trim(),
+                                quantity = line.state.quantityText.toIntOrNull() ?: 0,
+                                lineTotalYen = line.state.lineTotalText.toLongOrNull() ?: -1,
+                                categoryMajor = line.state.categoryMajor,
+                                categoryMinor = line.state.categoryMinor,
+                                necessityScore = line.state.necessityScore,
+                                confidence = line.confidence,
+                            )
+                        }
+                        val result = repo.applyReceiptEdit(
+                            ReceiptRepository.ReceiptEditInput(
+                                receiptId = receiptId,
+                                receiptDatetime = receiptDatetimeIso(),
+                                merchantName = merchant,
+                                totalAmountYen = totalYen,
+                                paymentMethod = paymentCode,
+                                paymentServiceName = paymentServiceName.trim().ifBlank { null },
+                                items = parsedItems,
+                            ),
+                        )
                         if (result.isSuccess) {
                             onSaved()
                         } else {
@@ -243,101 +498,8 @@ fun ReceiptReviewScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("保存して確定（要確認解除）")
+                Text("保存")
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ItemReviewEditor(
-    line: ReceiptItemEntity,
-    onUpdate: (ReceiptItemEntity) -> Unit,
-) {
-    val needsCategoryFix = ReceiptRequiredFields.itemsWithInvalidCategory(listOf(line)).isNotEmpty()
-    var majorMenu by remember { mutableStateOf(false) }
-    var minorMenu by remember { mutableStateOf(false) }
-    var major by remember(line.itemId) { mutableStateOf(line.categoryMajor) }
-    var minor by remember(line.itemId) { mutableStateOf(line.categoryMinor) }
-    LaunchedEffect(line.itemId, line.categoryMajor, line.categoryMinor) {
-        major = line.categoryMajor
-        minor = line.categoryMinor
-    }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(line.itemName, fontWeight = FontWeight.Medium)
-            Text("${line.lineTotalYen}円 ×${line.quantity}", style = MaterialTheme.typography.bodySmall)
-
-            if (needsCategoryFix) {
-                ExposedDropdownMenuBox(
-                    expanded = majorMenu,
-                    onExpandedChange = { majorMenu = !majorMenu },
-                ) {
-                    OutlinedTextField(
-                        value = CategoryCatalog.majorLabel(major),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("大カテゴリ（要修正）") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = majorMenu) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(),
-                    )
-                    DropdownMenu(expanded = majorMenu, onDismissRequest = { majorMenu = false }) {
-                        CategoryCatalog.majorsOrdered.forEach { (code, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    major = code
-                                    val minors = CategoryCatalog.minorsFor(code)
-                                    minor = minors.firstOrNull() ?: "その他"
-                                    majorMenu = false
-                                    onUpdate(line.copy(categoryMajor = major, categoryMinor = minor))
-                                },
-                            )
-                        }
-                    }
-                }
-                ExposedDropdownMenuBox(
-                    expanded = minorMenu,
-                    onExpandedChange = { minorMenu = !minorMenu },
-                ) {
-                    OutlinedTextField(
-                        value = minor,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("小カテゴリ") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = minorMenu) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(),
-                    )
-                    DropdownMenu(expanded = minorMenu, onDismissRequest = { minorMenu = false }) {
-                        CategoryCatalog.minorsFor(major).forEach { m ->
-                            DropdownMenuItem(
-                                text = { Text(m) },
-                                onClick = {
-                                    minor = m
-                                    minorMenu = false
-                                    onUpdate(line.copy(categoryMajor = major, categoryMinor = minor))
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text("必須度スコア: ${line.necessityScore}", style = MaterialTheme.typography.labelLarge)
-            Slider(
-                value = line.necessityScore.toFloat(),
-                onValueChange = { v ->
-                    onUpdate(line.copy(necessityScore = v.toInt().coerceIn(0, 100)))
-                },
-                valueRange = 0f..100f,
-                steps = 99,
-            )
         }
     }
 }

@@ -50,3 +50,29 @@
 - [ ] Google Cloudの **Android OAuthクライアント作成済み**（`work.temp1209.kakeibo` + debug SHA-1）
 - [ ] Pixel 8a が **ワイヤレスでadb接続**できる
 
+## 6) トラブルシューティング（実利用で判明）
+
+### Drive バックアップ: ログイン成功だが 403 / パーミッションエラー
+
+**よくある原因**: 開発 PC の載せ替え・Android Studio 再インストール後、**debug.keystore の SHA-1 が変わり**、Google Cloud の OAuth クライアントと不一致になる。
+
+**手順**:
+
+1. 現在の SHA-1 を取得（§3 の keytool コマンド）
+2. Google Cloud Console → **APIとサービス** → **認証情報**
+3. Android 用 OAuth 2.0 クライアント ID（パッケージ `work.temp1209.kakeibo`）を開く
+4. **SHA-1 証明書フィンガープリント** に手順1の値を **追加**（古い SHA-1 は残しても可）
+5. 数分待ってからアプリで **サインアウト → 再ログイン** → **今すぐバックアップ**
+
+その他:
+
+- OAuth **テストユーザー**に自分のアカウントを追加（外部公開前のテスト段階）
+- **Drive API** が有効であること
+- 調査の詳細: `DEBUGGING_GUIDE.md` §8、`KNOWN_ISSUES.md` §2
+
+### Gemini API キー未設定でレシート送信
+
+- 現状、送信確定しても **APIキー未設定の旨は表示されない**（`KNOWN_ISSUES.md` §3）
+- 対策（暫定）: 設定タブで API キーを保存してから撮影する
+- 恒久対応は実装計画 **Phase 7.3**
+

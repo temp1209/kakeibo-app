@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0",
+  "description": "necessityScore プロンプト改訂の回帰確認用フィクスチャ（Phase 6.4.3）。実レシート画像は含まない。主観確認・将来の自動テスト素材。",
+  "binaryThreshold": 50,
+  "cases": [
+    {
+      "id": "conbini_bento",
+      "itemName": "幕の内弁当",
+      "merchantContext": "コンビニ",
+      "categoryHint": "FOOD / 外食",
+      "expectedMin": 65,
+      "expectedMax": 80,
+      "rationale": "生活食・外食の実用。店がコンビニでも弁当は必須寄り"
+    },
+    {
+      "id": "conbini_sweets",
+      "itemName": "チョコレート菓子",
+      "merchantContext": "コンビニ",
+      "categoryHint": "FOOD / その他",
+      "expectedMin": 25,
+      "expectedMax": 45,
+      "rationale": "嗜好・甘味。同店でもスイーツは裁量寄り"
+    },
+    {
+      "id": "hyakuen_consumable",
+      "itemName": "ゴミ袋",
+      "merchantContext": "100均",
+      "categoryHint": "DAILY_GOODS / 雑貨（小物）",
+      "expectedMin": 75,
+      "expectedMax": 90,
+      "rationale": "生活消耗品。100均でも実用品は必須寄り"
+    },
+    {
+      "id": "hyakuen_toy",
+      "itemName": "キャラクター雑貨",
+      "merchantContext": "100均",
+      "categoryHint": "DAILY_GOODS / 雑貨（小物）",
+      "expectedMin": 20,
+      "expectedMax": 40,
+      "rationale": "装飾・趣味小物。100均でも裁量寄り"
+    },
+    {
+      "id": "game_gacha",
+      "itemName": "ゲーム内課金",
+      "merchantContext": "アプリストア",
+      "categoryHint": "ENTERTAINMENT / ゲーム（課金）",
+      "expectedMin": 5,
+      "expectedMax": 20,
+      "rationale": "明確な娯楽・裁量支出"
+    }
+  ]
+}

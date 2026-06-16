@@ -17,8 +17,10 @@ import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.db.ReceiptListRow
+import work.temp1209.kakeibo.data.domain.CategoryCatalog
 import work.temp1209.kakeibo.data.domain.NecessityUtils
 import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
+import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -102,6 +104,27 @@ class ReceiptRepository(private val context: Context) {
         val paymentMethod: String,
         val paymentServiceName: String?,
         val items: List<ManualReceiptItemInput>,
+    )
+
+    data class ReceiptEditItemInput(
+        val itemId: String?,
+        val itemName: String,
+        val quantity: Int,
+        val lineTotalYen: Long,
+        val categoryMajor: String,
+        val categoryMinor: String,
+        val necessityScore: Int,
+        val confidence: Double,
+    )
+
+    data class ReceiptEditInput(
+        val receiptId: String,
+        val receiptDatetime: String,
+        val merchantName: String,
+        val totalAmountYen: Long,
+        val paymentMethod: String,
+        val paymentServiceName: String?,
+        val items: List<ReceiptEditItemInput>,
     )
 
     /**
@@ -313,6 +336,101 @@ class ReceiptRepository(private val context: Context) {
         Result.success(Unit)
     }
 
+    /**
+     * Phase 6.3: レシート修正画面からのフル編集保存。
+     * 明細の再採番・調整行の自動付与を行い、必須充足時に DONE へ確定する。
+     */
+    suspend fun applyReceiptEdit(input: ReceiptEditInput): Result<Unit> = withContext(Dispatchers.IO) {
+        val existing = dao.getReceiptOrNull(input.receiptId)
+            ?: return@withContext Result.failure(IllegalStateException("レシートが見つかりません"))
+        if (existing.deletedAt != null) {
+            return@withContext Result.failure(IllegalStateException("削除済みのレシートは保存できません"))
+        }
+        if (existing.analysisStatus == "PENDING" || existing.analysisStatus == "RUNNING") {
+            return@withContext Result.failure(IllegalStateException("解析完了前に保存できません"))
+        }
+        if (input.items.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("明細は1行以上必要です"))
+        }
+        if (input.items.size > 30) {
+            return@withContext Result.failure(IllegalArgumentException("明細は最大30行までです"))
+        }
+        val merchantTrimmed = input.merchantName.trim()
+        if (merchantTrimmed.isBlank() || merchantTrimmed.length > 80) {
+            return@withContext Result.failure(IllegalArgumentException("店名を1〜80文字で入力してください"))
+        }
+        if (input.totalAmountYen < 0) {
+            return@withContext Result.failure(IllegalArgumentException("合計金額が不正です"))
+        }
+        if (!ReceiptRequiredFields.isReceiptDatetimeParseable(input.receiptDatetime)) {
+            return@withContext Result.failure(IllegalArgumentException("取引日時が不正です"))
+        }
+        if (input.paymentMethod.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("支払手段を選択してください"))
+        }
+
+        input.items.forEachIndexed { idx, it ->
+            if (it.itemName.isBlank() || it.itemName.length > 120) {
+                return@withContext Result.failure(IllegalArgumentException("${idx + 1}行目: 商品名を1〜120文字で入力してください"))
+            }
+            if (it.quantity < 1) {
+                return@withContext Result.failure(IllegalArgumentException("${idx + 1}行目: 数量は1以上で入力してください"))
+            }
+            if (it.lineTotalYen < 0) {
+                return@withContext Result.failure(IllegalArgumentException("${idx + 1}行目: 行合計（円）を入力してください"))
+            }
+            if (!CategoryCatalog.isValidPair(it.categoryMajor, it.categoryMinor)) {
+                return@withContext Result.failure(IllegalArgumentException("${idx + 1}行目: カテゴリが不正です"))
+            }
+        }
+
+        val nonAdjustmentItems = input.items.mapIndexed { idx, it ->
+            ReceiptItemEntity(
+                itemId = it.itemId ?: "${input.receiptId}:edit:${UUID.randomUUID()}",
+                receiptId = input.receiptId,
+                lineIndex = idx,
+                itemName = it.itemName.trim(),
+                quantity = it.quantity,
+                lineTotalYen = it.lineTotalYen,
+                categoryMajor = it.categoryMajor,
+                categoryMinor = it.categoryMinor,
+                necessityScore = it.necessityScore.coerceIn(0, 100),
+                confidence = it.confidence,
+                isAdjustment = 0,
+            )
+        }
+        val subtotal = nonAdjustmentItems.sumOf { it.lineTotalYen }
+        val adjustment = input.totalAmountYen - subtotal
+        val allItems = nonAdjustmentItems.toMutableList()
+        if (adjustment != 0L) {
+            val maxLineIndex = nonAdjustmentItems.maxOfOrNull { it.lineIndex } ?: -1
+            allItems += ReceiptItemEntity(
+                itemId = "${input.receiptId}:adjustment",
+                receiptId = input.receiptId,
+                lineIndex = maxLineIndex + 1,
+                itemName = "調整",
+                quantity = 1,
+                lineTotalYen = adjustment,
+                categoryMajor = "OTHER",
+                categoryMinor = "その他",
+                necessityScore = 50,
+                confidence = 1.0,
+                isAdjustment = 1,
+            )
+        }
+
+        val updatedReceipt = existing.copy(
+            merchantName = merchantTrimmed,
+            receiptDatetime = input.receiptDatetime.trim(),
+            totalAmountYen = input.totalAmountYen,
+            paymentMethod = input.paymentMethod,
+            paymentServiceName = input.paymentServiceName?.trim()?.ifBlank { null },
+            itemsSubtotalYen = subtotal,
+            adjustmentYen = adjustment,
+        )
+        applyReceiptReview(updatedReceipt, allItems)
+    }
+
     /** 一覧行の加重平均（DAO サブクエリと一致させるための再計算用・テスト等） */
     fun weightedNecessityForItems(items: List<ReceiptItemEntity>): Double? =
         NecessityUtils.weightedAverageScore(items)
@@ -407,9 +525,89 @@ class ReceiptRepository(private val context: Context) {
         dao.listNeedsReview(limit)
     }
 
+    suspend fun listFailedForResend(limit: Int = 30) = withContext(Dispatchers.IO) {
+        dao.listFailedForResend(limit)
+    }
+
+    sealed class ResendAnalysisResult {
+        data object Success : ResendAnalysisResult()
+        data object ReceiptNotFound : ResendAnalysisResult()
+        data object NotFailed : ResendAnalysisResult()
+        data object ApiKeyMissing : ResendAnalysisResult()
+        data object ImageMissing : ResendAnalysisResult()
+        data object AlreadyQueued : ResendAnalysisResult()
+    }
+
+    /**
+     * Phase 6.2: 解析失敗レシートを手動で再送信する。
+     * - キューを QUEUED に戻し attemptCount をリセット
+     * - 自動リトライは行わない（AnalysisWorker 側で1回のみ実行）
+     */
+    suspend fun resendAnalysis(receiptId: String): ResendAnalysisResult = withContext(Dispatchers.IO) {
+        val existing = dao.getReceiptOrNull(receiptId)
+            ?: return@withContext ResendAnalysisResult.ReceiptNotFound
+        if (existing.deletedAt != null) {
+            return@withContext ResendAnalysisResult.ReceiptNotFound
+        }
+        if (existing.analysisStatus != "FAILED") {
+            return@withContext ResendAnalysisResult.NotFailed
+        }
+        if (existing.inputKind == "MANUAL_NO_RECEIPT") {
+            return@withContext ResendAnalysisResult.NotFailed
+        }
+        if (!GeminiApiKeyStore(context).hasKey()) {
+            return@withContext ResendAnalysisResult.ApiKeyMissing
+        }
+        if (!isReceiptImageReadable(receiptId)) {
+            return@withContext ResendAnalysisResult.ImageMissing
+        }
+
+        val queueEntry = dao.getQueueEntryForReceipt(receiptId)
+        if (queueEntry != null && queueEntry.status in IN_FLIGHT_QUEUE_STATUSES) {
+            return@withContext ResendAnalysisResult.AlreadyQueued
+        }
+
+        val now = Instant.now().toString()
+        val queued = if (queueEntry != null) {
+            dao.resetQueueForResend(receiptId, now) > 0
+        } else {
+            dao.enqueueOnce(receiptId, now)
+        }
+        if (!queued) {
+            return@withContext ResendAnalysisResult.AlreadyQueued
+        }
+
+        dao.upsertReceipt(
+            existing.copy(
+                analysisStatus = "PENDING",
+                analysisStartedAt = null,
+                analysisCompletedAt = null,
+                analysisErrorMessage = null,
+                needsReview = 0,
+                updatedAt = now,
+            ),
+        )
+        scheduleAnalysisWork()
+        Log.d(TAG, "resendAnalysis receiptId=$receiptId")
+        ResendAnalysisResult.Success
+    }
+
+    private suspend fun isReceiptImageReadable(receiptId: String): Boolean {
+        val img = dao.getReceiptImage(receiptId) ?: return false
+        if (img.deletedAt != null) return false
+        val uri = runCatching { Uri.parse(img.localUri) }.getOrNull() ?: return false
+        val file = uri.toFileOrNull()
+        if (file != null) return file.exists()
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { }
+            true
+        }.getOrDefault(false)
+    }
+
     companion object {
         private const val TAG = "ReceiptRepo"
         private const val UNIQUE_WORK_NAME = "analysis-queue"
+        private val IN_FLIGHT_QUEUE_STATUSES = setOf("QUEUED", "RUNNING")
     }
 }
 

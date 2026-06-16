@@ -23,3 +23,14 @@ sealed class Route(val value: String) {
         fun create(receiptId: String) = "receipt/$receiptId/review"
     }
 }
+
+/** ボトムタブのルート（子画面ではない） */
+val tabRouteValues: Set<String> = setOf(
+    Route.Camera.value,
+    Route.List.value,
+    Route.Analysis.value,
+    Route.Notifications.value,
+    Route.Settings.value,
+)
+
+fun isTabRoute(route: String?): Boolean = route != null && route in tabRouteValues
