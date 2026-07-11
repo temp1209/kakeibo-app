@@ -158,7 +158,7 @@ flowchart LR
 
 ### Phase 5 残タスク
 
-- [ ] 解析状態の可視化統一（一覧 / 詳細 / 通知タブで同一ラベル）— [`docs/plans/phase-5-2-analysis-status.md`](docs/plans/phase-5-2-analysis-status.md)
+- [x] 解析状態の可視化統一（一覧 / 詳細 / 通知タブで同一ラベル）— [`docs/plans/phase-5-2-analysis-status.md`](docs/plans/phase-5-2-analysis-status.md)
 - [ ] 通知履歴の永続化（OS 通知見逃し対策）
 - [ ] Gemini JSON 閲覧体験の改善、プロンプト継続チューニング
 

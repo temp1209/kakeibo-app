@@ -19,7 +19,7 @@
 |----------|------|------|
 | [`plans/onboarding.md`](plans/onboarding.md) | Phase 7.1 オンボーディング | ✅ 完了（§13 にコード精査メモ） |
 | [`plans/backup-manual-migration.md`](plans/backup-manual-migration.md) | Drive 廃止 → 手動 JSON バックアップ | ✅ 完了 |
-| [`plans/phase-5-2-analysis-status.md`](plans/phase-5-2-analysis-status.md) | 解析状態の可視化統一 | ⬜ **次に着手** |
+| [`plans/phase-5-2-analysis-status.md`](plans/phase-5-2-analysis-status.md) | 解析状態の可視化統一 | ✅ 完了 |
 
 ## その他
 
