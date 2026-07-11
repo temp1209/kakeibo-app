@@ -1,14 +1,14 @@
 # エージェント引き継ぎメモ
 
 **最終更新**: 2026-07-11  
-**ブランチ**: `main`（`origin/main` より 7 コミット先行、push 待ち）
+**ブランチ**: `feat/phase7`（`origin/main` へ PR マージ待ち）
 
 ---
 
 ## いま何をしているか
 
-- **Phase 7 完了** — 7.3 APIキーガード、7.2' 手動バックアップ、7.1 オンボーディング（いずれも実機確認済み）。
-- **マージ準備完了** — ローカル `main` に Phase 7 一式が揃っている。`git push origin main` でリモート反映可能。
+- **Phase 7 完了** — 7.3 / 7.2' / 7.1 いずれも実機確認済み。
+- **マージ準備完了** — `feat/phase7` を `origin` に push 済み。`main` は保護ブランチのため **PR 経由でマージ**。
 - **次の主戦場**: Phase 5.2（解析状態の可視化統一）。
 
 **後回し（意図的）**
@@ -27,8 +27,17 @@
 | `assembleDebug` | ✅ |
 | ドキュメント同期 | ✅ |
 | コード精査（クリティカルなし） | ✅ |
-| ローカルコミット | ✅（7 commits ahead） |
-| `git push` | ⬜ ユーザー実行待ち |
+| ローカルコミット | ✅ |
+| `feat/phase7` push | ✅ |
+| PR 作成・マージ | ⬜ [`PR を作成`](https://github.com/temp1209/kakeibo-app/pull/new/feat/phase7)（`gh auth login` 後は `gh pr create` 可） |
+
+### PR 用サマリ（コピペ可）
+
+**タイトル**: `Phase 7: APIキーガード、手動バックアップ、初回オンボーディング`
+
+**本文要点**:
+- 7.3 送信ガード / 7.2' Drive廃止・手動JSON / 7.1 オンボーディング
+- 実機確認済み。ブラッシュアップ・精査改善は後回し（`ONBOARDING_IMPLEMENTATION_PLAN.md` §12–13）
 
 ### push 対象コミット（古い順）
 
