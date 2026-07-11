@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 
 @Composable
 fun requireCameraPermission(
+    autoRequest: Boolean = true,
     onGranted: @Composable () -> Unit,
     onDenied: @Composable () -> Unit,
 ) {
@@ -30,8 +31,8 @@ fun requireCameraPermission(
         onResult = { isGranted -> granted = isGranted },
     )
 
-    LaunchedEffect(Unit) {
-        if (!granted) launcher.launch(Manifest.permission.CAMERA)
+    LaunchedEffect(autoRequest) {
+        if (!granted && autoRequest) launcher.launch(Manifest.permission.CAMERA)
     }
 
     if (granted) onGranted() else onDenied()

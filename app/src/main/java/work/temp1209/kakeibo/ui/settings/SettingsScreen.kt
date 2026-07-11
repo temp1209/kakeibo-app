@@ -8,12 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -26,7 +24,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,6 +32,7 @@ import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.ui.backup.FileBackupUiState
+import work.temp1209.kakeibo.ui.settings.GeminiApiKeyInputSection
 import work.temp1209.kakeibo.ui.common.TabScreenTitle
 
 @Composable
@@ -50,7 +48,6 @@ fun SettingsScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var apiKeyInput by remember { mutableStateOf("") }
-    var showOverwriteConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
 
@@ -81,39 +78,12 @@ fun SettingsScreen(
         SnackbarHost(hostState = snackbarHostState)
 
         Text("Gemini")
-        Text(
-            text = if (store.hasKey()) {
-                "APIキー: 保存済み（表示はしません）"
-            } else {
-                "APIキー: 未設定"
-            },
-        )
 
-        OutlinedTextField(
-            value = apiKeyInput,
-            onValueChange = { apiKeyInput = it },
-            label = { Text("Gemini APIキーを入力") },
-            placeholder = { Text("AIza...") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+        GeminiApiKeyInputSection(
+            store = store,
+            apiKeyInput = apiKeyInput,
+            onApiKeyInputChange = { apiKeyInput = it },
         )
-
-        Button(
-            onClick = {
-                val trimmed = apiKeyInput.trim()
-                if (trimmed.isEmpty()) return@Button
-                if (store.hasKey()) {
-                    showOverwriteConfirm = true
-                } else {
-                    store.saveKey(trimmed)
-                    apiKeyInput = ""
-                }
-            },
-            enabled = apiKeyInput.isNotBlank(),
-        ) {
-            Text(if (store.hasKey()) "APIキーを更新" else "APIキーを保存")
-        }
 
         Button(
             onClick = { showDeleteConfirm = true },
@@ -165,29 +135,6 @@ fun SettingsScreen(
         ) {
             Text(if (fileBackup.importing) "インポート中…" else "JSON から復元（マージ）")
         }
-    }
-
-    if (showOverwriteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showOverwriteConfirm = false },
-            title = { Text("APIキーを更新しますか？") },
-            text = { Text("既存のAPIキーを上書きします。よろしいですか？") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val trimmed = apiKeyInput.trim()
-                        if (trimmed.isNotEmpty()) {
-                            store.saveKey(trimmed)
-                            apiKeyInput = ""
-                        }
-                        showOverwriteConfirm = false
-                    },
-                ) { Text("更新") }
-            },
-            dismissButton = {
-                Button(onClick = { showOverwriteConfirm = false }) { Text("キャンセル") }
-            },
-        )
     }
 
     if (showDeleteConfirm) {

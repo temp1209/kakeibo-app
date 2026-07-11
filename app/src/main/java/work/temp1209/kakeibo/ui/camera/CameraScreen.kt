@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import work.temp1209.kakeibo.data.image.resizeJpegLongSide
 import work.temp1209.kakeibo.data.image.saveJpeg
+import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import java.io.File
 import java.util.UUID
 
@@ -54,6 +56,8 @@ fun CameraScreen(
     contentPadding: PaddingValues,
     /** false のときプレビューを隠しカメラを unbind（タブ切替前など） */
     previewActive: Boolean = true,
+    showApiKeyBanner: Boolean = false,
+    onOpenSettings: (() -> Unit)? = null,
     onCaptured: (Uri) -> Unit,
     onOpenAddExpenseSheet: (() -> Unit)? = null,
 ) {
@@ -125,6 +129,18 @@ fun CameraScreen(
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         SnackbarHost(hostState = snackbarHostState)
+
+        if (showApiKeyBanner && onOpenSettings != null) {
+            Text(
+                text = "${GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE} タップして設定へ。",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenSettings)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
 
         if (previewActive) {
             AndroidView(

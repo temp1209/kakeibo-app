@@ -67,6 +67,8 @@ import java.time.YearMonth
 import work.temp1209.kakeibo.ui.manual.ManualExpenseScreen
 import work.temp1209.kakeibo.data.image.EvidenceImageImporter
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.OnboardingPrefs
+import work.temp1209.kakeibo.ui.onboarding.OnboardingWizard
 
 /** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
 private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
@@ -146,6 +148,8 @@ private fun AppNav(
         },
     )
     val backupPrefs = remember { FileBackupPrefs(context) }
+    val onboardingPrefs = remember { OnboardingPrefs(context) }
+    var showOnboarding by remember { mutableStateOf(!onboardingPrefs.isCompleted()) }
     var showMonthlyBackupPrompt by remember { mutableStateOf(false) }
     var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
@@ -155,6 +159,10 @@ private fun AppNav(
 
     LaunchedEffect(deepLinkReceiptId) {
         val id = deepLinkReceiptId ?: return@LaunchedEffect
+        if (!onboardingPrefs.isCompleted()) {
+            onboardingPrefs.setCompleted(true)
+            showOnboarding = false
+        }
         navController.navigate(Route.ReceiptDetail.create(id))
         onConsumeDeepLink()
     }
@@ -183,6 +191,16 @@ private fun AppNav(
     var addExpenseSheetOpen by remember { mutableStateOf(false) }
     var showApiKeyMissingDialog by remember { mutableStateOf(false) }
     val apiKeyStore = remember { GeminiApiKeyStore(context) }
+
+    if (showOnboarding && deepLinkReceiptId == null) {
+        OnboardingWizard(
+            onFinished = {
+                onboardingPrefs.setCompleted(true)
+                showOnboarding = false
+            },
+        )
+        return
+    }
 
     fun confirmPreviewOrShowApiKeyDialog(onConfirmed: () -> Unit) {
         if (apiKeyStore.hasKey()) {
@@ -314,6 +332,10 @@ private fun AppNav(
                         CameraScreen(
                             contentPadding = PaddingValues(0.dp),
                             previewActive = !cameraPreviewSuppressed,
+                            showApiKeyBanner = !apiKeyStore.hasKey(),
+                            onOpenSettings = {
+                                navController.navigateToTabRoot(Route.Settings.value)
+                            },
                             onCaptured = { uri ->
                                 scope.launch {
                                     cameraPreviewSuppressed = true
