@@ -293,11 +293,11 @@ Driveへアップロードする「バックアップJSON」のスキーマ。**
 - 送信確定時: APIキー未設定ならダイアログ（Phase 7.3）
 - 通知タップで起動（`EXTRA_RECEIPT_ID`）: ウィザードをスキップし詳細へ直行
 
-実装: `OnboardingPrefs`, `OnboardingWizard`, `GeminiApiKeyInputSection`。詳細は [`ONBOARDING_IMPLEMENTATION_PLAN.md`](ONBOARDING_IMPLEMENTATION_PLAN.md)。
+実装: `OnboardingPrefs`, `OnboardingWizard`, `GeminiApiKeyInputSection`。詳細は [`plans/onboarding.md`](plans/onboarding.md)。
 
 **UI ブラッシュアップ**: 最小ウィザードで実機確認済み。見た目・遷移の磨き込みは Phase 5.2 等の後に着手（意図的に後回し）。
 
-1か月の実利用（`docs/1か月使った感想.txt`）と改訂実装計画（`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`）に基づき、以下を改定する。**実装完了までは上記各節の記述が現行要件**であり、本節は改定先の方針と理由を記録する。
+1か月の実利用（[`archive/feedback/1か月使った感想.txt`](archive/feedback/1か月使った感想.txt)）と改訂実装計画（[`archive/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](archive/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md)）に基づき、以下を改定する。**実装完了までは上記各節の記述が現行要件**であり、本節は改定先の方針と理由を記録する。
 
 ### A. ナビゲーション（§3 入力/フロー）
 
@@ -659,7 +659,7 @@ Driveへアップロードする「バックアップJSON」のスキーマ。**
 
 ## 実装ギャップ（2026-07-11 更新）
 
-要件に記載があるが **未実装またはタスク未整理** の項目。詳細は `docs/KNOWN_ISSUES.md` および実装計画 [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md)。
+要件に記載があるが **未実装またはタスク未整理** の項目。詳細は [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) および実装計画 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)。
 
 | 項目 | 要件上の位置づけ | 現状 |
 |------|------------------|------|

@@ -3,7 +3,7 @@
 > **ステータス**: 実装済み（実機確認済み・2026-07-11）  
 > **作成日**: 2026-07-11  
 > **実装完了**: 2026-07-11  
-> **親計画**: [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md) §7.1
+> **親計画**: [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) §7.1
 
 **ブラッシュアップ**: UI/UX の細かい改善（レイアウト、文言、アニメーション、ステップインジケータ等）は **意図的に後回し**。Phase 5.2 以降の優先タスクを先に進める。
 
@@ -256,7 +256,7 @@ if (hasExistingReceipts || apiKeyStore.hasKey()) {
 
 1. `REQUIREMENTS.md` にオンボーディング § 追加
 2. `KNOWN_ISSUES.md` §1 を解決済みに
-3. `IMPLEMENTATION_PLAN_REVISED_2026-07-11.md` の 7.1 チェック更新
+3. [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) の 7.1 チェック更新
 4. 実機: データ削除 → Wizard 一通り → 撮影 → 解析
 
 ---
@@ -344,7 +344,7 @@ Phase 7.1 実装後の精査。**クリティカルな問題はなし**。以下
 
 ## 参照
 
-- [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md)
+- [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md)
 - [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §1
 - [`REQUIREMENTS.md`](REQUIREMENTS.md) §3, §10, 実装ギャップ表
-- [`BACKUP_MANUAL_MIGRATION_PLAN.md`](BACKUP_MANUAL_MIGRATION_PLAN.md) — バックアップ案内の参照先
+- [`backup-manual-migration.md`](backup-manual-migration.md) — バックアップ案内の参照先

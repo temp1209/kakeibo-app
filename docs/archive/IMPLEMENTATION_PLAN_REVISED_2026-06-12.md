@@ -2,7 +2,7 @@
 
 > **⚠️ 本ファイルは Phase 6 着手時点の計画です。**  
 > Phase 6 は `feat/phase6` で **完了**（2026-06-15 実機確認）。  
-> **現行の次にやること**は [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md) を参照。
+> **現行の次にやること**は [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) を参照。
 
 このファイルは、**1か月の実利用フィードバック**（`docs/1か月使った感想.txt`）と、前回計画（`docs/IMPLEMENTATION_PLAN_REVISED_2026-04-26.md`）を踏まえ、次に着手すべき項目を優先度付きで整理し直したもの。
 

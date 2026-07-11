@@ -1,6 +1,6 @@
 # 実装計画（改訂版） 2026-06-16
 
-> **現行の次にやること**は [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md) を参照。
+> **現行の次にやること**は [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) を参照。
 
 このファイルは、**Phase 6 完了**（`feat/phase6`、実機確認済み）と **06-16 実利用フィードバック**（`docs/KNOWN_ISSUES.md`）を踏まえ、次に着手すべき項目を優先度付きで整理し直したもの。
 

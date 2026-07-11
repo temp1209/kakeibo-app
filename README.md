@@ -110,16 +110,14 @@ flowchart LR
 
 | ドキュメント | 内容 |
 |-------------|------|
+| [`docs/README.md`](docs/README.md) | **ドキュメント索引**（入口） |
 | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | 要件定義（UX・データモデル・カテゴリ体系） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md) | 実装計画（Phase 7 途中・手動バックアップ移行・最新） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md) | Phase 7 着手時の計画（アーカイブ） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md) | Phase 6 定義（完了・アーカイブ） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-04-26.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-04-26.md) | Phase 1〜5 の到達点・完了状況 |
+| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | 現行実装計画 |
 | [`docs/DEBUGGING_GUIDE.md`](docs/DEBUGGING_GUIDE.md) | 実機デバッグ・再現性確保の手順 |
 | [`docs/EXTERNAL_SETUP.md`](docs/EXTERNAL_SETUP.md) | Gemini API の外部サービス設定 |
-| [`docs/BACKUP_MANUAL_MIGRATION_PLAN.md`](docs/BACKUP_MANUAL_MIGRATION_PLAN.md) | 手動 JSON バックアップへの移行計画 |
-| [`docs/ONBOARDING_IMPLEMENTATION_PLAN.md`](docs/ONBOARDING_IMPLEMENTATION_PLAN.md) | Phase 7.1 オンボーディング実装計画 |
+| [`docs/plans/`](docs/plans/) | 完了フェーズの詳細計画（オンボーディング・バックアップ移行） |
 | [`docs/daily/`](docs/daily/) | 開発日報 |
+| [`docs/archive/`](docs/archive/) | 旧版実装計画 |
 
 ---
 
@@ -146,7 +144,7 @@ flowchart LR
 
 ## ロードマップ
 
-実装計画（[`docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md)）に基づく、直近の改善項目です。
+実装計画（[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)）に基づく、直近の改善項目です。
 
 ### Phase 6: 実利用フィードバック対応（完了）
 
