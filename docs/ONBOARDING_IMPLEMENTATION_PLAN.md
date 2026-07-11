@@ -305,6 +305,43 @@ if (hasExistingReceipts || apiKeyStore.hasKey()) {
 
 ---
 
+## 13. コード精査メモ（2026-07-11・後回し）
+
+Phase 7.1 実装後の精査。**クリティカルな問題はなし**。以下は意図的に後回し（Phase 5.2 優先、ブラッシュアップ時に参照）。
+
+### 中程度（次に手を入れるなら #1 から）
+
+| # | 項目 | 内容 | 対象ファイル |
+|---|------|------|-------------|
+| M1 | 権限状態が設定アプリ復帰後に古い | 拒否 → 端末設定で許可 → 戻ると UI が「未許可」のまま。「次へ」で進めるので致命ではない | `OnboardingWizard.kt`（`OnboardingPermissionStep`）、`CameraPermission.kt` |
+| M2 | 許可時に `onNext()` が二重呼び出しされうる | `onResult` と `LaunchedEffect(granted)` の両方。`nextStep(from)` 設計のため現状は実害ほぼなし | `OnboardingWizard.kt` |
+
+**M1 対策案**: `Lifecycle.Event.ON_RESUME` で `checkSelfPermission` を再実行。
+
+**M2 対策案**: 自動遷移は `LaunchedEffect` のみに寄せ、ダイアログ `onResult` は `granted` 更新だけにする。
+
+### 低優先（ブラッシュアップ時）
+
+| # | 項目 | 内容 |
+|---|------|------|
+| L1 | 画面回転で Wizard ステップがリセット | `step` が `remember` のみ（`rememberSaveable` 未使用） |
+| L2 | 「準備完了」画面でアプリ終了すると未完了扱い | `onboarding_completed` は「はじめる」押下時のみ `true` |
+| L3 | アップデートユーザー全員に Wizard が1回出る | 計画どおり。うるさければ既存データ検出でスキップするマイグレーション |
+| L4 | 上書き確認ダイアログの重複 | `OnboardingWizard` と `GeminiApiKeyInputSection` に同一ロジック |
+| L5 | `showOnboarding` が起動時 prefs のみ参照 | セッション中の prefs 外部変更に非追従（通常は問題にならない） |
+| L6 | オンボーディング拒否後、カメラタブで即再リクエスト | `requireCameraPermission(autoRequest=true)`。説明なしで OS ダイアログ |
+| L7 | `GeminiApiKeyStore.saveKey("")` で `hasKey()==true` になりうる | 呼び出し側は `trim` 済み。Store 側の防御は任意 |
+
+### 確認済み（問題なし・意図どおり）
+
+- deep link 起動時の Wizard スキップ（`deepLinkReceiptId` は `onCreate` で同期セット）
+- `OnboardingPrefs` の `applicationContext` 利用
+- カメラバナーは Wizard ゲートにより実質 `onboarding 完了後 && !hasKey()`
+- APIキー未設定の多層防御（Wizard → バナー → 7.3 ダイアログ → Worker `FAILED`）
+- `autoSkippedCamera/Notification` による戻る操作後のループ回避
+
+---
+
 ## 参照
 
 - [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md)

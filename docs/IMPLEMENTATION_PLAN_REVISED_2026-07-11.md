@@ -16,26 +16,22 @@
 | 5（一部） | カメラ/一覧 UI、プロンプト初回調整 | `feat/phase5` マージ済み |
 | **6（全項目）** | 1か月フィードバック対応 | PR #2 マージ済み（`a1b0038`） |
 | **7.3** | APIキー未設定時の送信ガード | `9802557` |
-| **7.2 → 7.2'** | データ保全の再設計 | Drive 連携廃止、手動 JSON + 月次リマインド（実機確認一部済み、未コミット） |
+| **7.2'** | 手動 JSON バックアップ + 月次リマインド | `3a3bdc4` 〜 `b493c16`、実機確認済み |
+| **7.1** | 初回オンボーディング | `7839258` / `a6cfea0`、実機確認済み |
 
-### Phase 7.3 完了内訳
+### Phase 7 — **完了**（`main` ローカル、push 待ち）
 
-| 項目 | 状態 | 関連 |
-|------|------|------|
-| 7.3.1 プレビュー送信前ガード | ✅ | `MainActivity.kt` — ダイアログ + 設定タブ誘導 |
-| 7.3.2 Worker 二重防御 | ✅ | `AnalysisWorker.kt` — キー未設定時 `FAILED` |
-| 7.3.3 文言統一 | ✅ | `GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE` |
+Phase 7 の実装タスクは一通り完了。オンボーディングの UI ブラッシュアップ・コード精査の改善項目は後回し（`ONBOARDING_IMPLEMENTATION_PLAN.md` §12–13、`KNOWN_ISSUES.md` §4）。
 
 ### Phase 7.2' 手動バックアップ（Drive 代替）
 
 | 項目 | 状態 | 関連 |
 |------|------|------|
-| Drive 連携の削除 | ✅（未コミット） | `data/drive/*` 削除、`play-services-auth` 除去 |
-| SAF エクスポート/インポート | ✅（未コミット） | `FileBackupOrchestrator`, `FileBackupLaunchers` |
-| 設定 UI | ✅（未コミット） | `SettingsScreen.kt` |
+| Drive 連携の削除 | ✅ | `data/drive/*` 削除、`play-services-auth` 除去 |
+| SAF エクスポート/インポート | ✅ | `FileBackupOrchestrator`, `FileBackupLaunchers` |
+| 設定 UI | ✅ | `SettingsScreen.kt` |
 | 月次リマインド | ✅ 実機確認 | 一覧タブで表示、エクスポート後は再表示なし |
-| エクスポート | ✅ 実機確認 | SAF 保存、JSON 中身確認済み |
-| 実機スモーク（復元） | ⬜ | 削除 → インポート → 件数確認は未実施 |
+| エクスポート・復元 | ✅ 実機確認 | SAF 保存、削除 → インポート確認済み |
 
 詳細: [`BACKUP_MANUAL_MIGRATION_PLAN.md`](BACKUP_MANUAL_MIGRATION_PLAN.md)
 
@@ -43,10 +39,10 @@
 
 | 由来 | 項目 |
 |------|------|
-| **Phase 7 残** | ~~初回オンボーディング（7.1）~~ ✅ 実装済み |
 | Phase 5 残 | 解析状態可視化、Gemini JSON 改善、プロンプト継続チューニング |
 | Phase 2.5 残 | 通知履歴の永続化 |
-| ドキュメント | `REQUIREMENTS.md` / `KNOWN_ISSUES.md` / `EXTERNAL_SETUP.md` のバックアップ記述更新 |
+| 7.1 後回し | UI ブラッシュアップ、コード精査改善（§13） |
+| ドキュメント | `EXTERNAL_SETUP.md` の Drive 記述整理（任意） |
 
 ---
 
@@ -203,9 +199,25 @@
 
 ### M1 — 初回体験（2〜3 セッション）
 
-- 7.1 オンボーディング（Drive 節なしの軽量ウィザード）
+- ~~7.1 オンボーディング~~ ✅ 完了（ブラッシュアップ・§13 改善は後回し）
 
-**出口**: 新規インストールから迷わず撮影・解析まで到達できる。
+**出口**: ✅ 新規インストールから迷わず撮影・解析まで到達できる。
+
+---
+
+## マージ準備（2026-07-11）
+
+**Phase 7 はローカル `main` で完了**。`origin/main` へ **7 コミット** push すればリモート反映完了。
+
+| コミット | 概要 |
+|----------|------|
+| `9802557` | 7.3 APIキーガード（+ Drive v2 履歴、直後に廃止） |
+| `3a3bdc4`〜`b493c16` | 7.2' 手動バックアップ |
+| `7839258` / `a6cfea0` | 7.1 オンボーディング |
+
+push 前の確認: 実機スモーク済み、`assembleDebug` 成功、作業ツリー clean。
+
+詳細チェックリスト: [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md)「マージ準備チェックリスト」
 
 ---
 
@@ -241,9 +253,8 @@
 
 | ブランチ / 状態 | 内容 | 次のアクション |
 |-----------------|------|----------------|
-| `main` | Phase 6 マージ済み + `9802557`（7.3 + Drive v2） | 7.2' をコミット、push |
-| 作業ツリー | 7.2' 手動バックアップ（未コミット） | 実機確認後コミット |
-| `origin/main` | ローカルより 1〜2 コミット遅れの可能性 | push で同期 |
+| `main`（ローカル） | Phase 6 + **Phase 7 完了**（7 commits ahead） | `git push origin main` |
+| `origin/main` | Phase 6 マージ済みまで | push で Phase 7 反映 |
 
 ---
 
@@ -251,8 +262,8 @@
 
 | 要件（当初） | 現方針 | 備考 |
 |--------------|--------|------|
-| Drive 日次バックアップ | **廃止** → 手動 JSON + 月次リマインド | 07-11 判断。`REQUIREMENTS.md` 要更新 |
-| APIキー「初回起動で入力」 | **7.1 オンボーディング + 7.3 ガード** | ✅ 7.1・7.3 完了（7.1 実機確認待ち） |
+| Drive 日次バックアップ | **廃止** → 手動 JSON + 月次リマインド | ✅ 7.2' 完了 |
+| APIキー「初回起動で入力」 | **7.1 オンボーディング + 7.3 ガード** | ✅ 完了 |
 | 解析失敗時の自動リトライ | **手動再送信のみ** | Phase 6.2 で実装済み |
 | 低信頼修正は編集範囲を絞る | **手入力同等 UI** | Phase 6.3 で実装済み |
 | 手動バックアップボタン | **実装済み**（設定 + 月次ダイアログ） | 当初は「将来検討」だった |
@@ -264,7 +275,7 @@
 - [`IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](IMPLEMENTATION_PLAN_REVISED_2026-06-16.md) — 前版（Phase 7 着手時）
 - [`IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](IMPLEMENTATION_PLAN_REVISED_2026-06-12.md) — Phase 6 定義
 - [`BACKUP_MANUAL_MIGRATION_PLAN.md`](BACKUP_MANUAL_MIGRATION_PLAN.md) — Drive 廃止・手動バックアップ設計
-- [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) — バックログ（要更新）
+- [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) — バックログ（§4 に 7.1 精査後回し項目）
 - [`REQUIREMENTS.md`](REQUIREMENTS.md) — 要件定義
 - [`docs/daily/2026-06-16.md`](daily/2026-06-16.md) — Phase 7.2/7.3 + Drive v2 試行の日報
 - [`docs/1か月使った感想.txt`](1か月使った感想.txt) — Phase 6 の元フィードバック

@@ -1,7 +1,7 @@
 # 既知の課題・バックログ（実利用フィードバック）
 
 実機利用や開発中に気づいた、**未対応または要件に未明文化**の項目を集約する。  
-実装タスクの詳細は [`IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](IMPLEMENTATION_PLAN_REVISED_2026-06-16.md) の **Phase 7** を参照。
+実装タスクの詳細は [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md) を参照。
 
 最終更新: 2026-07-11
 
@@ -40,34 +40,10 @@
 
 | 項目 | 内容 |
 |------|------|
-| **状態** | 調査・修正待ち（バグ） |
-| **発見** | 2026-06-16 実利用（開発環境再構築後） |
+| **状態** | 🚫 クローズ（2026-07-11）— Drive 連携廃止（Phase 7.2'） |
+| **発見** | 2026-06-16 実利用 |
 
-### 症状
-
-- 設定画面で **Google ログインは成功** する（アカウント表示される）
-- **今すぐバックアップ** 実行時に **パーミッションエラー（403 等）** で失敗する
-
-### 想定される原因（優先度順）
-
-1. **debug.keystore の SHA-1 変更**（PC 載せ替え・再インストール後）  
-   → Google Cloud の Android OAuth クライアントに **現在の SHA-1 が未登録**
-2. OAuth 同意画面の **テストユーザー** にログインアカウントが含まれていない
-3. **Drive API 未有効化** または `drive.appdata` スコープ未付与
-4. サインイン時に `drive.appdata` スコープがユーザーに拒否された（再ログインで解消する場合あり）
-
-### 関連コード
-
-- `GoogleSignInHelper.kt` — `requestScopes(Scope(DRIVE_APPDATA_SCOPE))`
-- `DriveBackupOrchestrator.kt` / `DriveBackupRepository.kt`
-- `SettingsScreen.kt` — ログイン成功後に `runScheduledBackup`、失敗は Snackbar
-- `DriveBackupWorker.kt` — HTTP 403 を `Result.success()` で握りつぶす（**ユーザーに失敗が伝わりにくい**）
-
-### 調査手順
-
-- `DEBUGGING_GUIDE.md` §8、`EXTERNAL_SETUP.md` §6 を参照
-- Logcat で `DriveHttpException` / OkHttp レスポンス本文を確認
-- `keytool -list -v -keystore %USERPROFILE%\.android\debug.keystore` で SHA-1 を再取得し Console と照合
+Drive 自動バックアップは手動 JSON バックアップに置き換え済み。調査知見は git 履歴・`docs/daily/2026-06-16.md` に残す。
 
 ---
 
@@ -75,42 +51,30 @@
 
 | 項目 | 内容 |
 |------|------|
-| **状態** | 修正待ち（UX バグ） |
+| **状態** | ✅ 解決済み（2026-07-11、Phase 7.3） |
 | **発見** | 2026-06-16 実利用 |
 
-### 症状
+### 実装
 
-- Gemini API キーが **未設定** の状態でプレビュー画面から **送信確定** できる
-- 送信後はカメラに戻るが、**解析が進まない**／失敗理由がユーザーに伝わらない
-- 設定タブを開くまで「APIキーが必要」と気づけない
+- プレビュー送信前ガード（`MainActivity.confirmPreviewOrShowApiKeyDialog`）
+- Worker 二重防御（キー未設定時 `FAILED` + `MISSING_KEY_USER_MESSAGE`）
+- Phase 7.1 でオンボーディング・カメラバナー追加
 
-### 技術的背景
+---
 
-- `PreviewScreen` / `MainActivity` は送信前に `GeminiApiKeyStore.hasKey()` をチェックしていない
-- `enqueueAnalysis` はキー有無に関係なくキュー投入する
-- `AnalysisWorker.doWork()` はキー未設定時 **`Result.success()` で即終了**（サイレントスキップ）
+## 4. Phase 7.1 オンボーディング — 技術的改善バックログ（後回し）
 
-```kotlin
-// AnalysisWorker.kt（現状）
-val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull() ?: return Result.success()
-```
+| 項目 | 内容 |
+|------|------|
+| **状態** | バックログ（クリティカルなし・2026-07-11 精査） |
+| **詳細** | [`ONBOARDING_IMPLEMENTATION_PLAN.md`](ONBOARDING_IMPLEMENTATION_PLAN.md) **§13** |
 
-### 望ましい対応（案）
-
-- [ ] **送信確定前**（プレビュー画面）で API キー未設定ならダイアログ + 設定タブへ誘導
-- [ ] または送信確定時に Snackbar / ダイアログで明示
-- [ ] `AnalysisWorker` 側はキー未設定でキューが残り続けないよう、レシートを `FAILED` + エラーメッセージにする（二重防御）
-- [ ] Phase 6.2 の再送信と同様、設定誘導の文言を統一
-
-### 関連
-
-- `ReceiptRepository.resendAnalysis()` は `ApiKeyMissing` ガードあり（**再送信のみ対応済み**）
-- `PreviewScreen.kt`, `MainActivity.kt`, `AnalysisWorker.kt`, `GeminiApiKeyStore.kt`
+優先度の高いもの（権限の ON_RESUME 再チェック、許可時 `onNext` 二重呼び出し整理）は Phase 5.2 後またはブラッシュアップ時に着手。
 
 ---
 
 ## 参照
 
-- 実装計画 Phase 7: `IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`
-- 外部サービス・SHA-1: `EXTERNAL_SETUP.md`
-- Drive 403 調査: `DEBUGGING_GUIDE.md` §8
+- 実装計画: [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md)
+- オンボーディング精査 §13: [`ONBOARDING_IMPLEMENTATION_PLAN.md`](ONBOARDING_IMPLEMENTATION_PLAN.md)
+- 外部サービス・SHA-1（Drive 調査用・履歴）: `EXTERNAL_SETUP.md`
