@@ -12,6 +12,8 @@ import androidx.work.Constraints
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.analysis.AnalysisWorker
+import work.temp1209.kakeibo.data.notifications.NotificationHistory
+import work.temp1209.kakeibo.data.notifications.NotificationHistoryEntry
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
@@ -528,6 +530,16 @@ class ReceiptRepository(private val context: Context) {
     suspend fun listFailedForResend(limit: Int = 30) = withContext(Dispatchers.IO) {
         dao.listFailedForResend(limit)
     }
+
+    suspend fun listNotificationHistory(limit: Int = NotificationHistory.DISPLAY_LIMIT) =
+        withContext(Dispatchers.IO) {
+            dao.listNotificationEvents(limit).map { event ->
+                NotificationHistoryEntry(
+                    event = event,
+                    receipt = dao.getReceiptOrNull(event.receiptId),
+                )
+            }
+        }
 
     sealed class ResendAnalysisResult {
         data object Success : ResendAnalysisResult()
