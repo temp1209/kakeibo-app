@@ -51,20 +51,20 @@
 
 - **debug ビルド**のみ `run-as work.temp1209.kakeibo` が使える
 - レシート画像は内部ストレージ `files/receipts/`（40日保持）。スクリプトは tar 対応端末なら一緒に退避を試みる
-- 復元は手動で DB を戻すより、下記 Drive JSON の方が安全
+- 復元は手動で DB を戻すより、下記 **JSON バックアップ** の方が安全
 
-### 方法 B: Drive バックアップ（JSON・取引データのみ）
+### 方法 B: 手動 JSON バックアップ（取引データのみ）
 
-1. アプリ **設定** → **今すぐバックアップ**（Google ログイン済み）
-2. JSON は Drive の **appDataFolder**（ユーザーからは見えない隠し領域）に保存される
-3. 万が一の復元はアプリの **Driveから復元（マージ）**
+1. アプリ **設定** → **JSON をエクスポート**
+2. SAF で保存先を選択（PC 連携フォルダ、Google Drive アプリ経由のローカルフォルダ等）
+3. 復元は **JSON から復元（マージ）** — インポート前に件数確認ダイアログあり
 
 画像は JSON に含まれない（要件どおり）。画像まで残すなら方法 A を併用。
 
 ### おすすめ（改善着手前）
 
 1. `dev-pull-device-data.ps1` で DB（＋可能なら画像）を PC に保存
-2. あわせて設定の **今すぐバックアップ** も実行
+2. あわせて設定の **JSON をエクスポート** も実行
 3. `backups/dev/` を ZIP して別場所にコピー
 
 `backups/` は `.gitignore` 済み想定（コミットしない）。
@@ -76,34 +76,13 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\dev-pull-device-data.ps1
 ```
 
-## 8) Google Drive バックアップが 403 / パーミッションエラーになる
+## 8) （履歴）Google Drive バックアップの 403 調査
 
-**症状**: 設定で Google ログインは成功するが、「今すぐバックアップ」で失敗する（Snackbar に permission / 403 等）。
+> **2026-07-11**: Drive 連携は廃止済み。手動 JSON バックアップに置き換え。以下は調査記録への参照のみ。
 
-### 切り分けチェックリスト
+- 旧手順・SHA-1 / OAuth 切り分け: [`archive/EXTERNAL_SETUP_DRIVE.md`](archive/EXTERNAL_SETUP_DRIVE.md)
+- 日報: [`daily/2026-06-16.md`](daily/2026-06-16.md)
+- 既知課題: [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §2（クローズ）
 
-1. **debug.keystore の SHA-1**（PC 載せ替え後はほぼ必須）
-   ```powershell
-   keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android
-   ```
-   - [Google Cloud Console](https://console.cloud.google.com/) → 認証情報 → **Android OAuth クライアント**（`work.temp1209.kakeibo`）に上記 SHA-1 が登録されているか
-   - 詳細: `EXTERNAL_SETUP.md` §6
-
-2. **OAuth 同意画面のテストユーザー**に、ログインした Google アカウントが含まれているか
-
-3. **Google Drive API** がプロジェクトで有効か
-
-4. **スコープ** `drive.appdata` がサインイン時に付与されているか  
-   - 対策: 設定でサインアウト → 再ログイン（スコープ同意を再表示）
-
-### Logcat
-
-- タグ・例外: `DriveHttpException`, OkHttp のレスポンス code / body
-- `DriveBackupWorker` は現状 **403 を success 扱い**する箇所あり → UI に失敗が出ない場合は Worker ログも確認（`KNOWN_ISSUES.md` §2）
-
-### コード上の参照
-
-- `GoogleSignInHelper.kt` — `DRIVE_APPDATA_SCOPE`
-- `DriveBackupRepository.kt` — REST 呼び出し
-- `SettingsScreen.kt` — 手動バックアップの Snackbar
+現行のバックアップ手順は **§7 方法 B** を参照。
 

@@ -115,7 +115,7 @@ flowchart LR
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | 現行実装計画 |
 | [`docs/DEBUGGING_GUIDE.md`](docs/DEBUGGING_GUIDE.md) | 実機デバッグ・再現性確保の手順 |
 | [`docs/EXTERNAL_SETUP.md`](docs/EXTERNAL_SETUP.md) | Gemini API の外部サービス設定 |
-| [`docs/plans/`](docs/plans/) | 完了フェーズの詳細計画（オンボーディング・バックアップ移行） |
+| [`docs/plans/`](docs/plans/) | フェーズ別詳細計画（オンボーディング・バックアップ移行・**次: 5.2 解析状態**） |
 | [`docs/daily/`](docs/daily/) | 開発日報 |
 | [`docs/archive/`](docs/archive/) | 旧版実装計画 |
 
@@ -158,7 +158,7 @@ flowchart LR
 
 ### Phase 5 残タスク
 
-- [ ] 解析状態の可視化統一（一覧 / 詳細 / 通知タブで同一ラベル）
+- [ ] 解析状態の可視化統一（一覧 / 詳細 / 通知タブで同一ラベル）— [`docs/plans/phase-5-2-analysis-status.md`](docs/plans/phase-5-2-analysis-status.md)
 - [ ] 通知履歴の永続化（OS 通知見逃し対策）
 - [ ] Gemini JSON 閲覧体験の改善、プロンプト継続チューニング
 

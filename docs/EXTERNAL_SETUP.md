@@ -1,78 +1,54 @@
-# 外部サービス準備メモ（実装前）
+# 外部サービス準備メモ
 
 このファイルは、実装前に行った「アカウント登録/コンソール設定/端末設定」を将来忘れないための記録。
 
+> **2026-07-11**: Google Drive 自動バックアップは廃止。Drive 関連の設定手順は [`archive/EXTERNAL_SETUP_DRIVE.md`](archive/EXTERNAL_SETUP_DRIVE.md)（履歴）。
+
 ## 決定事項
+
 - **配布形態**: 自分用（デバッグビルド/ローカル運用のみ）
 - **Gemini呼び出し**: アプリから直接呼び出し（サーバなし）
-- **Driveバックアップ方式**: Google Drive REST API + OAuth
-- **Drive保存先**: `appDataFolder`（App folder方式）
-- **Driveスコープ方針**: `drive.appdata`（最小権限）
+- **データ保全**: 手動 JSON エクスポート/インポート（SAF）。月次リマインドは一覧タブ
 - **Androidパッケージ名**: `work.temp1209.kakeibo`
 
 ## 1) Gemini（APIキー）
+
 - [x] **APIキーを作成**（プロジェクト作成が必要だったため作成して発行）
 - [x] **課金/クォータ/上限**を確認（予算アラート/クォータ上限が設定できるなら設定）
 - [ ] **APIキーの保管場所**を決める（パスワードマネージャ推奨）
   - 注意: リポジトリへコミットしない/コードへ直書きしない
+- [x] **初回入力導線**: オンボーディング Wizard + 設定タブ（Phase 7.1）
+- [x] **未設定時ガード**: 送信確定時ダイアログ + Worker `FAILED`（Phase 7.3）
 
-## 2) Google Drive（Google Cloud Console）
-- [x] **Google Cloudプロジェクトを作成**
-- [x] **Google Drive API を有効化**
-- [x] **OAuth同意画面を設定**
-- [x] **テストユーザーに自分のGoogleアカウントを追加**
-- [x] **スコープ方針を確定**
-  - App folder（`appDataFolder`）運用
-  - 最小権限（`drive.appdata`）
-- [x] **OAuthクライアントID（Android）を作成**
-  - **パッケージ名**: `work.temp1209.kakeibo`
-  - **署名SHA-1**: debug.keystore のSHA-1を使用
+## 2) デバッグ署名（debug.keystore）
 
-## 3) デバッグ署名（debug.keystore）
-- [x] **debug.keystore のSHA-1を取得**
+- [x] **debug.keystore のSHA-1を取得**（Drive 調査時に使用。現行バックアップでは不要）
   - PowerShellでは `%USERPROFILE%` が展開されない場合があるため、`$env:USERPROFILE` を使用
-  - debug.keystore の作成日が過去（例: 2024/12/23）でも問題なし（同じPCでデバッグする限りSHA-1は安定）
-- [ ] **注意メモ**
-  - 別PC/再インストール等で keystore が変わるとSHA-1も変わる → OAuth側にSHA-1を追加登録が必要
 
-## 4) 端末（Pixel 8a）/ ワイヤレスデバッグ
+## 3) 端末（Pixel 8a）/ ワイヤレスデバッグ
+
 - [x] **開発者向けオプション**を有効化
 - [x] **USBデバッグ**を有効化
 - [x] **ワイヤレスデバッグ**を有効化
 - [x] **PCから接続**（`adb pair` → `adb connect` 相当の設定）
 - [x] **接続確認**（`adb devices` で端末が見える）
-- [x] **端末にGoogleアカウントをログイン**（Driveバックアップ用）
 - [x] **通知テスト準備**（通知許可）
 - [x] **バッテリー最適化**（必要なら除外設定）: WorkManagerが止まりにくいように調整
 
-## 5) 実装に入る前に「手元に揃っている」こと
+## 4) 実装に入る前に「手元に揃っている」こと
+
 - [ ] Gemini **APIキー**（入力用）
-- [ ] Google Cloudの **Android OAuthクライアント作成済み**（`work.temp1209.kakeibo` + debug SHA-1）
 - [ ] Pixel 8a が **ワイヤレスでadb接続**できる
 
-## 6) トラブルシューティング（実利用で判明）
-
-### Drive バックアップ: ログイン成功だが 403 / パーミッションエラー
-
-**よくある原因**: 開発 PC の載せ替え・Android Studio 再インストール後、**debug.keystore の SHA-1 が変わり**、Google Cloud の OAuth クライアントと不一致になる。
-
-**手順**:
-
-1. 現在の SHA-1 を取得（§3 の keytool コマンド）
-2. Google Cloud Console → **APIとサービス** → **認証情報**
-3. Android 用 OAuth 2.0 クライアント ID（パッケージ `work.temp1209.kakeibo`）を開く
-4. **SHA-1 証明書フィンガープリント** に手順1の値を **追加**（古い SHA-1 は残しても可）
-5. 数分待ってからアプリで **サインアウト → 再ログイン** → **今すぐバックアップ**
-
-その他:
-
-- OAuth **テストユーザー**に自分のアカウントを追加（外部公開前のテスト段階）
-- **Drive API** が有効であること
-- 調査の詳細: `DEBUGGING_GUIDE.md` §8、`KNOWN_ISSUES.md` §2
+## 5) トラブルシューティング
 
 ### Gemini API キー未設定でレシート送信
 
-- 現状、送信確定しても **APIキー未設定の旨は表示されない**（`KNOWN_ISSUES.md` §3）
-- 対策（暫定）: 設定タブで API キーを保存してから撮影する
-- 恒久対応は実装計画 **Phase 7.3**
+- **現状（7.3 以降）**: 送信確定時に理由を表示し設定へ誘導。Worker は `FAILED` + メッセージを記録
+- 対策: 設定タブまたはオンボーディングで API キーを保存してから撮影
 
+### 手動 JSON バックアップ
+
+- 設定 → **JSON をエクスポート** / **JSON から復元（マージ）**
+- ローカル 0 件ではエクスポート不可
+- 実機デバッグ手順: [`DEBUGGING_GUIDE.md`](DEBUGGING_GUIDE.md) §7

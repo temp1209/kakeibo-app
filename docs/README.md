@@ -13,12 +13,13 @@
 | [`DEBUGGING_GUIDE.md`](DEBUGGING_GUIDE.md) | 実機デバッグ手順 |
 | [`EXTERNAL_SETUP.md`](EXTERNAL_SETUP.md) | Gemini API 等の外部設定 |
 
-## フェーズ別の詳細計画（完了済み）
+## フェーズ別の詳細計画
 
-| ファイル | 内容 |
-|----------|------|
-| [`plans/onboarding.md`](plans/onboarding.md) | Phase 7.1 オンボーディング（§13 にコード精査メモ） |
-| [`plans/backup-manual-migration.md`](plans/backup-manual-migration.md) | Drive 廃止 → 手動 JSON バックアップ移行 |
+| ファイル | 内容 | 状態 |
+|----------|------|------|
+| [`plans/onboarding.md`](plans/onboarding.md) | Phase 7.1 オンボーディング | ✅ 完了（§13 にコード精査メモ） |
+| [`plans/backup-manual-migration.md`](plans/backup-manual-migration.md) | Drive 廃止 → 手動 JSON バックアップ | ✅ 完了 |
+| [`plans/phase-5-2-analysis-status.md`](plans/phase-5-2-analysis-status.md) | 解析状態の可視化統一 | ⬜ **次に着手** |
 
 ## その他
 
@@ -26,7 +27,8 @@
 |------|------|
 | [`daily/`](daily/) | 開発日報（歴史的記録。パスは当時のまま） |
 | [`fixtures/`](fixtures/) | 回帰テスト用フィクスチャ |
-| [`archive/`](archive/) | 旧版実装計画・起動時メモ |
+| [`archive/REQUIREMENTS_DRIVE_BACKUP.md`](archive/REQUIREMENTS_DRIVE_BACKUP.md) | 旧 Drive バックアップ要件 |
+| [`archive/EXTERNAL_SETUP_DRIVE.md`](archive/EXTERNAL_SETUP_DRIVE.md) | 旧 Drive OAuth 設定手順 |
 
 ## ディレクトリ構成
 
@@ -39,7 +41,7 @@ docs/
 ├── AGENT_HANDOFF.md
 ├── DEBUGGING_GUIDE.md
 ├── EXTERNAL_SETUP.md
-├── plans/                 ← 完了したフェーズの詳細計画
+├── plans/                 ← フェーズ別詳細計画（完了 + 次タスク）
 ├── daily/                 ← 日報
 ├── fixtures/              ← テスト素材
 └── archive/               ← 旧版ドキュメント

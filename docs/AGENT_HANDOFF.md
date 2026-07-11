@@ -1,15 +1,15 @@
 # エージェント引き継ぎメモ
 
-**最終更新**: 2026-07-11  
+**最終更新**: 2026-07-11（ドキュメント同期 7.2'.6 完了）  
 **ブランチ**: `main`（Phase 7 マージ済み・PR #3）
 
 ---
 
 ## いま何をしているか
 
-- **Phase 7 完了・マージ済み** — 7.3 / 7.2' / 7.1（PR #3）。
-- **次の主戦場**: Phase 5.2（解析状態の可視化統一）。
-- **ドキュメント**: `docs/` を整理（[`docs/README.md`](README.md) が索引）。
+- **Phase 7 完了** — 7.3 / 7.2' / 7.1 / ドキュメント同期まで完了。
+- **次の主戦場**: Phase 5.2（解析状態の可視化統一）— [`plans/phase-5-2-analysis-status.md`](plans/phase-5-2-analysis-status.md)
+- **ドキュメント**: `docs/` 整理済み（[`docs/README.md`](README.md) が索引）
 
 **後回し（意図的）**
 
@@ -36,6 +36,7 @@
 | 用途 | パス |
 |------|------|
 | **現行実装計画** | `docs/IMPLEMENTATION_PLAN.md` |
+| **次タスク詳細** | `docs/plans/phase-5-2-analysis-status.md` |
 | 7.1 計画・精査 §13 | `docs/plans/onboarding.md` |
 | バックアップ移行 | `docs/plans/backup-manual-migration.md` |
 | **ドキュメント索引** | `docs/README.md` |
