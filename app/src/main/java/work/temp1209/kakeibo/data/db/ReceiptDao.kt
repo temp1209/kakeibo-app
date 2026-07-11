@@ -101,6 +101,9 @@ interface ReceiptDao {
     @Query("SELECT * FROM receipts ORDER BY updatedAt DESC")
     suspend fun listAllReceiptsForExport(): List<ReceiptEntity>
 
+    @Query("SELECT COUNT(*) FROM receipts WHERE deletedAt IS NULL")
+    suspend fun countActiveReceipts(): Int
+
     @Query("DELETE FROM receipt_items WHERE receiptId = :receiptId")
     suspend fun deleteItemsForReceipt(receiptId: String)
 

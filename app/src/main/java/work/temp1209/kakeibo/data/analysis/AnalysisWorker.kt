@@ -24,12 +24,17 @@ class AnalysisWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val dao = AppDatabase.get(applicationContext).receiptDao()
-        val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull() ?: return Result.success()
         val gemini = GeminiClient()
 
         Log.d(TAG, "doWork start")
         while (true) {
             val entry = dao.getNextQueuedOrNull() ?: break
+            val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull()
+            if (apiKey == null) {
+                handleMissingApiKeyFailure(dao = dao, entry = entry)
+                continue
+            }
+
             val now = Instant.now().toString()
             Log.d(TAG, "dequeue queueId=${entry.queueId} receiptId=${entry.receiptId} attemptCount=${entry.attemptCount}")
             dao.markQueueRunning(queueId = entry.queueId, startedAt = now)
@@ -216,6 +221,40 @@ class AnalysisWorker(
 
         Log.d(TAG, "doWork end (no more queued)")
         return Result.success()
+    }
+
+    private suspend fun handleMissingApiKeyFailure(
+        dao: ReceiptDao,
+        entry: AnalysisQueueEntity,
+    ) {
+        val now = Instant.now().toString()
+        val attempt = entry.attemptCount + 1
+        val message = GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE
+        Log.w(TAG, "api key missing receiptId=${entry.receiptId}")
+        dao.markQueueRunning(queueId = entry.queueId, startedAt = now)
+        val existing = dao.getReceiptOrNull(entry.receiptId)
+        if (existing != null) {
+            dao.upsertReceipt(
+                existing.copy(
+                    analysisStatus = "FAILED",
+                    analysisStartedAt = existing.analysisStartedAt ?: now,
+                    analysisCompletedAt = now,
+                    analysisErrorMessage = message,
+                    needsReview = 1,
+                    updatedAt = now,
+                ),
+            )
+        }
+        dao.finishQueue(
+            queueId = entry.queueId,
+            status = "FAILED",
+            finishedAt = now,
+            lastError = message,
+            attemptCount = attempt,
+        )
+        if (shouldSendAnalysisOsNotification(existing)) {
+            AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+        }
     }
 
     /**

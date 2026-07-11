@@ -32,6 +32,9 @@ class GeminiApiKeyStore(context: Context) {
     fun readKeyOrNull(): String? = prefs.getString(KEY_API_KEY, null)
 
     companion object {
+        const val MISSING_KEY_USER_MESSAGE =
+            "Gemini APIキーが未設定です。設定画面で入力してください。"
+
         private const val FILE_NAME = "secrets"
         private const val KEY_API_KEY = "gemini_api_key"
     }

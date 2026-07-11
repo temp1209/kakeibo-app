@@ -35,6 +35,7 @@ import kotlin.OptIn
 import kotlinx.coroutines.launch
 import work.temp1209.kakeibo.ui.common.TabScreenTitle
 import work.temp1209.kakeibo.data.ReceiptRepository
+import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 
 private data class NotificationTabSnapshot(
@@ -84,7 +85,7 @@ fun NotificationsScreen(
             ReceiptRepository.ResendAnalysisResult.Success ->
                 "再送信しました。解析が完了するまでお待ちください。"
             ReceiptRepository.ResendAnalysisResult.ApiKeyMissing ->
-                "Gemini APIキーが未設定です。設定画面で入力してください。"
+                GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE
             ReceiptRepository.ResendAnalysisResult.ImageMissing ->
                 "画像ファイルが見つかりません。再撮影するか削除してください。"
             ReceiptRepository.ResendAnalysisResult.AlreadyQueued ->

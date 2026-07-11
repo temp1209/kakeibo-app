@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -54,12 +56,19 @@ import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import work.temp1209.kakeibo.ui.analysis.AnalysisScreen
 import work.temp1209.kakeibo.ui.review.ReceiptReviewScreen
-import work.temp1209.kakeibo.data.work.DriveBackupScheduler
+import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
+import work.temp1209.kakeibo.data.backup.MonthlyBackupPromptPolicy
+import work.temp1209.kakeibo.ui.backup.MonthlyBackupPromptDialog
+import work.temp1209.kakeibo.ui.backup.recordMonthlyPromptDismissed
+import work.temp1209.kakeibo.ui.backup.rememberFileBackupUi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.YearMonth
 import work.temp1209.kakeibo.ui.manual.ManualExpenseScreen
 import work.temp1209.kakeibo.data.image.EvidenceImageImporter
+import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.OnboardingPrefs
+import work.temp1209.kakeibo.ui.onboarding.OnboardingWizard
 
 /** カメラプレビューを隠して unbind してから遷移するまでの待ち（フレーム確保） */
 private const val CAMERA_PREVIEW_HIDE_BEFORE_NAV_MS = 48L
@@ -131,16 +140,29 @@ private fun AppNav(
     val context = LocalContext.current
     val repo = remember { ReceiptRepository(context) }
     val scope = rememberCoroutineScope()
+    val fileBackup = rememberFileBackupUi(
+        onMessage = { message ->
+            scope.launch {
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            }
+        },
+    )
+    val backupPrefs = remember { FileBackupPrefs(context) }
+    val onboardingPrefs = remember { OnboardingPrefs(context) }
+    var showOnboarding by remember { mutableStateOf(!onboardingPrefs.isCompleted()) }
+    var showMonthlyBackupPrompt by remember { mutableStateOf(false) }
     var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
-    // 要件: 起動時に40日超過画像を掃除（冪等）
     LaunchedEffect(Unit) {
         repo.cleanupExpiredImages()
-        DriveBackupScheduler.schedule(context)
     }
 
     LaunchedEffect(deepLinkReceiptId) {
         val id = deepLinkReceiptId ?: return@LaunchedEffect
+        if (!onboardingPrefs.isCompleted()) {
+            onboardingPrefs.setCompleted(true)
+            showOnboarding = false
+        }
         navController.navigate(Route.ReceiptDetail.create(id))
         onConsumeDeepLink()
     }
@@ -154,10 +176,39 @@ private fun AppNav(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    val isOnListTab = currentDestination?.hierarchy?.any { it.route == Route.List.value } == true
+    LaunchedEffect(isOnListTab) {
+        if (!isOnListTab) return@LaunchedEffect
+        if (MonthlyBackupPromptPolicy.shouldShow(context, backupPrefs)) {
+            showMonthlyBackupPrompt = true
+            backupPrefs.setLastPromptShownYearMonth(YearMonth.now().toString())
+        }
+    }
+
     var listPeriodKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var listLastMonthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
 
     var addExpenseSheetOpen by remember { mutableStateOf(false) }
+    var showApiKeyMissingDialog by remember { mutableStateOf(false) }
+    val apiKeyStore = remember { GeminiApiKeyStore(context) }
+
+    if (showOnboarding && deepLinkReceiptId == null) {
+        OnboardingWizard(
+            onFinished = {
+                onboardingPrefs.setCompleted(true)
+                showOnboarding = false
+            },
+        )
+        return
+    }
+
+    fun confirmPreviewOrShowApiKeyDialog(onConfirmed: () -> Unit) {
+        if (apiKeyStore.hasKey()) {
+            onConfirmed()
+        } else {
+            showApiKeyMissingDialog = true
+        }
+    }
 
     fun setPreviewInputKind(kind: String) {
         navController.currentBackStackEntry?.savedStateHandle?.set("previewInputKind", kind)
@@ -234,6 +285,42 @@ private fun AppNav(
             )
         }
 
+        if (showApiKeyMissingDialog) {
+            AlertDialog(
+                onDismissRequest = { showApiKeyMissingDialog = false },
+                title = { androidx.compose.material3.Text("APIキーが必要") },
+                text = { androidx.compose.material3.Text(GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showApiKeyMissingDialog = false
+                            navController.navigateToTabRoot(Route.Settings.value)
+                        },
+                    ) {
+                        androidx.compose.material3.Text("設定へ")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showApiKeyMissingDialog = false }) {
+                        androidx.compose.material3.Text("キャンセル")
+                    }
+                },
+            )
+        }
+
+        if (showMonthlyBackupPrompt) {
+            MonthlyBackupPromptDialog(
+                onExport = {
+                    showMonthlyBackupPrompt = false
+                    fileBackup.launchExport()
+                },
+                onDismiss = {
+                    showMonthlyBackupPrompt = false
+                    recordMonthlyPromptDismissed(backupPrefs)
+                },
+            )
+        }
+
         NavHost(
             navController = navController,
             startDestination = Route.Camera.value,
@@ -245,6 +332,10 @@ private fun AppNav(
                         CameraScreen(
                             contentPadding = PaddingValues(0.dp),
                             previewActive = !cameraPreviewSuppressed,
+                            showApiKeyBanner = !apiKeyStore.hasKey(),
+                            onOpenSettings = {
+                                navController.navigateToTabRoot(Route.Settings.value)
+                            },
                             onCaptured = { uri ->
                                 scope.launch {
                                     cameraPreviewSuppressed = true
@@ -287,8 +378,9 @@ private fun AppNav(
                     imageUri = imageUri,
                     onCancel = { navController.popBackStack() },
                     onConfirm = {
-                        // 二重保存防止: 1回押したら無視（UI側の無効化は後で追加してもOK）
-                        if (!saving) saving = true
+                        confirmPreviewOrShowApiKeyDialog {
+                            if (!saving) saving = true
+                        }
                     },
                 )
 
@@ -334,7 +426,11 @@ private fun AppNav(
                             navController.popBackStack()
                         }
                     },
-                    onConfirm = { if (!saving) saving = true },
+                    onConfirm = {
+                        confirmPreviewOrShowApiKeyDialog {
+                            if (!saving) saving = true
+                        }
+                    },
                 )
 
                 if (saving) {
@@ -386,7 +482,11 @@ private fun AppNav(
                 )
             }
             composable(Route.Settings.value) {
-                SettingsScreen(contentPadding = PaddingValues(0.dp))
+                SettingsScreen(
+                    contentPadding = PaddingValues(0.dp),
+                    fileBackup = fileBackup,
+                    backupPrefs = backupPrefs,
+                )
             }
 
             composable(

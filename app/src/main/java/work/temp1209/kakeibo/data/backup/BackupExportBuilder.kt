@@ -62,6 +62,20 @@ object BackupExportBuilder {
     fun receiptTimestamp(receipt: ReceiptEntity): Instant? =
         runCatching { Instant.parse(receipt.receiptDatetime ?: receipt.capturedAt) }.getOrNull()
 
+    /**
+     * 日次バックアップ（current-month.json）の対象判定。
+     * レシート印字日だけでなく、撮影日・最終更新日が当月なら含める（解析後に印字日が先月になるケース対策）。
+     */
+    fun isInCurrentMonthExport(receipt: ReceiptEntity, start: Instant, end: Instant): Boolean =
+        isInstantInWindow(receipt.receiptDatetime, start, end) ||
+            isInstantInWindow(receipt.capturedAt, start, end) ||
+            isInstantInWindow(receipt.updatedAt, start, end)
+
+    private fun isInstantInWindow(iso: String?, start: Instant, end: Instant): Boolean {
+        val t = iso?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return false
+        return !t.isBefore(start) && !t.isAfter(end)
+    }
+
     fun isReceiptInClosedMonth(receipt: ReceiptEntity, ym: YearMonth, zone: ZoneId = ZoneId.systemDefault()): Boolean {
         val t = receiptTimestamp(receipt) ?: return false
         val start = ym.atDay(1).atStartOfDay(zone).toInstant()
