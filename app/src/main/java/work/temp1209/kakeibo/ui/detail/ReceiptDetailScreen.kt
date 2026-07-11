@@ -58,6 +58,9 @@ import work.temp1209.kakeibo.data.domain.PaymentMethodCatalog
 import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
 import work.temp1209.kakeibo.ui.format.formatIsoInstant
 import work.temp1209.kakeibo.ui.format.formatYen
+import work.temp1209.kakeibo.ui.common.AnalysisStatusBadge
+import work.temp1209.kakeibo.ui.common.AnalysisStatusKind
+import work.temp1209.kakeibo.ui.common.analysisStatusDisplay
 
 @Composable
 fun ReceiptDetailScreen(
@@ -440,23 +443,26 @@ fun ReceiptDetailScreen(
                 }
             }
 
-            if (r.needsReview == 1 || r.analysisStatus == "NEEDS_REVIEW" || r.analysisStatus == "FAILED") {
+            val statusDisplay = r.analysisStatusDisplay()
+            if (statusDisplay.kind == AnalysisStatusKind.Failed ||
+                statusDisplay.kind == AnalysisStatusKind.NeedsReview
+            ) {
                 item {
                     val resendEnabled =
                         !resendInFlight &&
                             System.currentTimeMillis() >= resendCooldownUntil &&
-                            r.analysisStatus == "FAILED"
+                            statusDisplay.kind == AnalysisStatusKind.Failed
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
-                                text = if (r.analysisStatus == "FAILED") "解析失敗" else "要確認",
+                                text = statusDisplay.label,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                             )
                             r.analysisErrorMessage?.takeIf { it.isNotBlank() }?.let {
                                 Text(it, color = MaterialTheme.colorScheme.onErrorContainer)
                             }
-                            if (r.analysisStatus == "FAILED") {
+                            if (statusDisplay.kind == AnalysisStatusKind.Failed) {
                                 Button(
                                     onClick = { showResendConfirm = true },
                                     enabled = resendEnabled,
@@ -464,13 +470,13 @@ fun ReceiptDetailScreen(
                                     Text(if (resendInFlight) "送信中…" else "再送信")
                                 }
                             }
-                            if (r.analysisStatus != "FAILED") {
+                            if (statusDisplay.kind != AnalysisStatusKind.Failed) {
                                 Button(onClick = onOpenReview) { Text("修正画面へ") }
                             } else {
                                 Button(onClick = onOpenReview) { Text("手動で修正") }
                             }
 
-                        if (r.analysisStatus == "FAILED" && r.inputKind == "EVIDENCE_IMAGE") {
+                        if (statusDisplay.kind == AnalysisStatusKind.Failed && r.inputKind == "EVIDENCE_IMAGE") {
                             TextButton(
                                 onClick = {
                                     scope.launch {
@@ -487,9 +493,12 @@ fun ReceiptDetailScreen(
                         }
                     }
                 }
-            } else if (r.analysisStatus == "PENDING" || r.analysisStatus == "RUNNING") {
+            } else if (statusDisplay.showBadge &&
+                (statusDisplay.kind == AnalysisStatusKind.Pending ||
+                    statusDisplay.kind == AnalysisStatusKind.Running)
+            ) {
                 item {
-                    Text("解析待ち / 処理中: ${r.analysisStatus}", style = MaterialTheme.typography.bodyMedium)
+                    AnalysisStatusBadge(display = statusDisplay)
                 }
             }
 
