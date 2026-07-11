@@ -14,7 +14,6 @@ object MonthlyBackupPromptPolicy {
         if (activeCount < 1) return@withContext false
         if (prefs.hasExportedThisMonth()) return@withContext false
         val currentYm = YearMonth.now().toString()
-        if (prefs.dismissedPromptYearMonthOrNull() == currentYm) return@withContext false
         if (prefs.lastPromptShownYearMonthOrNull() == currentYm) return@withContext false
         true
     }

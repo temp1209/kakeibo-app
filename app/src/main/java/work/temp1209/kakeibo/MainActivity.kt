@@ -296,9 +296,9 @@ private fun AppNav(
                     showMonthlyBackupPrompt = false
                     fileBackup.launchExport()
                 },
-                onDismiss = { dismissForMonth ->
+                onDismiss = {
                     showMonthlyBackupPrompt = false
-                    recordMonthlyPromptDismissed(backupPrefs, dismissForMonth)
+                    recordMonthlyPromptDismissed(backupPrefs)
                 },
             )
         }

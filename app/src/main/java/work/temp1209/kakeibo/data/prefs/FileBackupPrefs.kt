@@ -21,12 +21,6 @@ class FileBackupPrefs(context: Context) {
         prefs.edit().putString(KEY_LAST_IMPORT_AT, iso).apply()
     }
 
-    fun dismissedPromptYearMonthOrNull(): String? = prefs.getString(KEY_DISMISSED_PROMPT_YM, null)
-
-    fun setDismissedPromptYearMonth(ym: String) {
-        prefs.edit().putString(KEY_DISMISSED_PROMPT_YM, ym).apply()
-    }
-
     fun lastPromptShownYearMonthOrNull(): String? = prefs.getString(KEY_LAST_PROMPT_SHOWN_YM, null)
 
     fun setLastPromptShownYearMonth(ym: String) {
@@ -43,7 +37,6 @@ class FileBackupPrefs(context: Context) {
         private const val PREFS_NAME = "file_backup_prefs"
         private const val KEY_LAST_EXPORT_AT = "last_export_at"
         private const val KEY_LAST_IMPORT_AT = "last_import_at"
-        private const val KEY_DISMISSED_PROMPT_YM = "dismissed_prompt_ym"
         private const val KEY_LAST_PROMPT_SHOWN_YM = "last_prompt_shown_ym"
     }
 }
