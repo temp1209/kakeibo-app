@@ -160,7 +160,11 @@ flowchart LR
 
 - [x] 解析状態の可視化統一（一覧 / 詳細 / 通知タブで同一ラベル）— [`docs/plans/phase-5-2-analysis-status.md`](docs/plans/phase-5-2-analysis-status.md)
 - [x] 通知履歴の永続化（OS 通知見逃し対策）
-- [ ] Gemini JSON 閲覧体験の改善、プロンプト継続チューニング
+### Phase 8 品質ブラッシュアップ（次）
+
+- [ ] Gemini JSON 閲覧改善 — [`docs/plans/phase-8-polish.md`](docs/plans/phase-8-polish.md) §8.1
+- [ ] オンボーディング UI・権限改善 — 同 §8.2–8.3
+- [ ] プロンプト継続チューニング（5.1・実利用並行）
 
 ### 将来検討
 

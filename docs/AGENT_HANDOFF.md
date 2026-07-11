@@ -1,20 +1,26 @@
 # エージェント引き継ぎメモ
 
-**最終更新**: 2026-07-11（Phase 5.2 実機確認済み）  
-**ブランチ**: `main`
+**最終更新**: 2026-07-11（Phase 8 計画策定）  
+**ブランチ**: `main`（5.2 / 2.5 実装コミットあり・push 要確認）
 
 ---
 
 ## いま何をしているか
 
-- **Phase 5.2 完了** — 解析状態の可視化統一（実機確認済み）。
-- **次の主戦場**: Phase 5.2 Gemini JSON 改善、または 2.5 実機確認。
-- **ドキュメント**: `docs/` 整理済み（[`docs/README.md`](README.md) が索引）
+- **M2 中核完了** — 5.2 解析状態（実機確認済み）、2.5 通知履歴（実装済み・実機確認待ち）。
+- **次の主戦場**: **Phase 8 品質ブラッシュアップ** — [`plans/phase-8-polish.md`](plans/phase-8-polish.md)
+- **要件**: `REQUIREMENTS.md` §15
 
-**後回し（意図的）**
+**Phase 8 の中身（まとめ）**
 
-- 7.1 UI ブラッシュアップ → `plans/onboarding.md` §12
-- 7.1 コード精査の改善 → `plans/onboarding.md` §13、`KNOWN_ISSUES.md` §4
+| 順 | 内容 |
+|----|------|
+| 8.1 | Gemini JSON（pretty-print・コピー・BottomSheet）— 小 |
+| 8.3 | オンボーディング M1/M2（権限再評価・二重遷移） |
+| 8.2 | オンボーディング UI（ステップ表示・文言） |
+| 8.4 | §13 低優先（任意） |
+
+**並行**: Phase 5.1 プロンプトチューニング（実利用ドリブン・PR 分離）
 
 ---
 
@@ -23,13 +29,11 @@
 | Phase | 内容 |
 |-------|------|
 | 6.1〜6.5 | ナビゲーション、再送信、修正画面、necessityScore、通知アイコン |
-| 7.3 | APIキー未設定時の送信ガード |
-| 7.2' | 手動 JSON バックアップ + 月次リマインド |
-| 7.1 | 初回オンボーディング Wizard + カメラバナー |
+| 7.3 / 7.2' / 7.1 | APIキーガード、手動バックアップ、オンボーディング |
 | 5.2 | 解析状態の可視化統一 |
-| 2.5 | 通知履歴の永続化（Room + 通知タブ） |
+| 2.5 | 通知履歴永続化 |
 
-実機確認済み: 6.2, 6.3, 7.2'（エクスポート・月次リマインド・復元）, 7.1（Wizard 一通り）, **5.2**（一覧・詳細・通知タブ）
+実機確認済み: 6.2, 6.3, 7.2', 7.1, **5.2**
 
 ---
 
@@ -38,22 +42,18 @@
 | 用途 | パス |
 |------|------|
 | **現行実装計画** | `docs/IMPLEMENTATION_PLAN.md` |
-| **次タスク詳細** | `docs/plans/phase-5-2-analysis-status.md` |
-| 7.1 計画・精査 §13 | `docs/plans/onboarding.md` |
-| バックアップ移行 | `docs/plans/backup-manual-migration.md` |
+| **次タスク詳細** | `docs/plans/phase-8-polish.md` |
+| オンボーディング §13 | `docs/plans/onboarding.md` |
+| 要件 §15 | `docs/REQUIREMENTS.md` |
 | **ドキュメント索引** | `docs/README.md` |
-| 既知の課題・バックログ | `docs/KNOWN_ISSUES.md` |
-| 要件 | `docs/REQUIREMENTS.md`（§14 オンボーディング） |
-| 日報 | `docs/daily/2026-07-11.md` |
 
 ---
 
-## 技術メモ（ハマりどころ）
+## 技術メモ
 
-- **APIキー**: `GeminiApiKeyStore` + オンボーディング + 7.3 ガード + Worker `FAILED`
-- **オンボーディング**: 未完了時 Wizard のみ。deep link はスキップ
-- **バックアップ**: SAF JSON、`FileBackupOrchestrator`。Drive コードは削除済み
-- **開発環境**: `JAVA_HOME` = Android Studio JBR。実機 Pixel 8a
+- **JSON 閲覧**: `ReceiptDetailScreen` → `AlertDialog` + minify JSON（8.1 で差し替え予定）
+- **通知履歴**: `NotificationHistory.kt`, `analysis_notification_events`（DB v5）
+- **オンボーディング改善**: `OnboardingWizard.kt` §13 M1/M2
 
 ---
 
@@ -61,4 +61,4 @@
 
 - 応答は **日本語**
 - 撮影体験の速さは最優先
-- クリティカルでない改善は後回しでよい（2026-07-11 方針）
+- クリティカルでない改善は Phase 8 にバンドル
