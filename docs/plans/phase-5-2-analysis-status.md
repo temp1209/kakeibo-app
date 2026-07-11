@@ -1,6 +1,6 @@
 # Phase 5.2 解析状態の可視化統一 — 実装計画
 
-> **ステータス**: ✅ 実装済み（2026-07-11）
+> **ステータス**: ✅ 実装・実機確認済み（2026-07-11）
 > **作成日**: 2026-07-11  
 > **親計画**: [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) §5.2
 
@@ -115,11 +115,11 @@ fun ReceiptEntity.analysisStatusPresentation(): AnalysisStatusPresentation
 1. `ReceiptsListScreen` にバッジ追加（FAILED / 解析中 / 解析待ち）
 2. バッジ過多にならないよう1行1バッジまで
 
-### Phase D — 実機確認（0.25日）
+### Phase D — 実機確認（0.25日）— ✅ 2026-07-11
 
-1. 解析待ち → 実行中 → 完了の遷移
-2. APIキー未設定で FAILED → ラベル・メッセージ
-3. 低信頼 NEEDS_REVIEW / needsReview バッジ
+1. [x] 解析待ち → 実行中 → 完了の遷移
+2. [x] APIキー未設定で FAILED → ラベル・メッセージ
+3. [x] 低信頼 NEEDS_REVIEW / needsReview バッジ
 
 ---
 
