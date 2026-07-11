@@ -118,6 +118,7 @@ flowchart LR
 | [`docs/DEBUGGING_GUIDE.md`](docs/DEBUGGING_GUIDE.md) | 実機デバッグ・再現性確保の手順 |
 | [`docs/EXTERNAL_SETUP.md`](docs/EXTERNAL_SETUP.md) | Gemini API の外部サービス設定 |
 | [`docs/BACKUP_MANUAL_MIGRATION_PLAN.md`](docs/BACKUP_MANUAL_MIGRATION_PLAN.md) | 手動 JSON バックアップへの移行計画 |
+| [`docs/ONBOARDING_IMPLEMENTATION_PLAN.md`](docs/ONBOARDING_IMPLEMENTATION_PLAN.md) | Phase 7.1 オンボーディング実装計画 |
 | [`docs/daily/`](docs/daily/) | 開発日報 |
 
 ---
@@ -155,7 +156,7 @@ flowchart LR
 
 - [x] **APIキー未設定時の送信ガード** — プレビュー + Worker
 - [x] **手動 JSON バックアップ** — Drive 連携廃止、SAF エクスポート/復元、月次リマインド
-- [ ] **初回オンボーディング** — ウィザード・権限・APIキー誘導
+- [x] **初回オンボーディング** — ウィザード・権限・APIキー誘導（ブラッシュアップは後回し）
 
 ### Phase 5 残タスク
 

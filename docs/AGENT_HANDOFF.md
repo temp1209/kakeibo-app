@@ -1,16 +1,17 @@
 # エージェント引き継ぎメモ
 
 **最終更新**: 2026-07-11  
-**ブランチ**: `main`（7.2' 手動バックアップは作業ツリー未コミット）
+**ブランチ**: `main`（7.1 コミット前）
 
 ---
 
 ## いま何をしているか
 
 - **Phase 6 は `main` にマージ済み**（PR #2）。
-- **Phase 7.3（APIキーガード）完了**（`9802557`）。
-- **Phase 7.2（Drive）は廃止** → **7.2' 手動 JSON バックアップ**に移行（エクスポート・リマインドは実機確認済み、未コミット）。
-- **次の実装は Phase 7.1 オンボーディング**（`docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md` が現行計画）。
+- **Phase 7 完了** — 7.3 APIキーガード、7.2' 手動バックアップ、7.1 オンボーディング（いずれも実機確認済み）。
+- **次の主戦場**: Phase 5.2（解析状態の可視化統一）。
+
+**7.1 ブラッシュアップは後回し** — ウィザードの UI 磨き込みは意図的に延期。`ONBOARDING_IMPLEMENTATION_PLAN.md` §12 参照。
 
 ---
 
@@ -24,22 +25,20 @@
 | 6.4 | necessityScore プロンプト改訂 + 回帰フィクスチャ |
 | 6.5 | 通知アイコン `ic_notification.xml` |
 | 7.3 | APIキー未設定時の送信ガード |
-| 7.2' | 手動 JSON バックアップ + 月次リマインド（エクスポート・リマインド実機確認済み、未コミット） |
+| 7.2' | 手動 JSON バックアップ + 月次リマインド |
+| 7.1 | 初回オンボーディング Wizard + カメラバナー |
 
-実機確認済み: 6.2, 6.3, 7.2'（エクスポート・月次リマインド）
+実機確認済み: 6.2, 6.3, 7.2'（エクスポート・月次リマインド・復元）, 7.1（Wizard 一通り）
 
 ---
 
 ## 次にやること（優先順）
 
-1. **7.2' コミット** — エクスポート・月次リマインドは実機確認済み  
-2. **復元フロー実機スモーク**（任意）— 削除 → インポート → 件数確認
+1. **`git push`**
+2. **Phase 5.2** — 解析状態の可視化統一
+3. **7.1 ブラッシュアップ**（低優先・後回し）— ウィザード UI/UX の磨き込み
 
-3. **Phase 7.1** — 初回オンボーディング（Drive 節なしの軽量ウィザード）
-
-4. **ドキュメント同期** — `REQUIREMENTS.md`, `KNOWN_ISSUES.md` のバックアップ記述
-
-5. **Phase 5 残** — 解析状態可視化、通知履歴永続化、Gemini JSON 改善
+---
 
 ## 重要ファイル
 
@@ -47,19 +46,32 @@
 |------|------|
 | **現行実装計画** | `docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md` |
 | バックアップ移行 | `docs/BACKUP_MANUAL_MIGRATION_PLAN.md` |
+| 7.1 オンボーディング | `docs/ONBOARDING_IMPLEMENTATION_PLAN.md` |
 | 既知の課題 | `docs/KNOWN_ISSUES.md` |
-| 要件・ギャップ | `docs/REQUIREMENTS.md`（末尾「実装ギャップ」） |
-| 日報（Phase 6） | `docs/daily/2026-06-15.md` |
+| 要件・ギャップ | `docs/REQUIREMENTS.md`（§14 オンボーディング、末尾ギャップ表） |
+| 日報 | `docs/daily/2026-07-11.md` |
 | デバッグ | `docs/DEBUGGING_GUIDE.md` |
+
+### 7.1 新規/変更コード
+
+| ファイル | 役割 |
+|----------|------|
+| `data/prefs/OnboardingPrefs.kt` | 完了フラグ |
+| `ui/onboarding/OnboardingWizard.kt` | 5ステップ Wizard |
+| `ui/settings/GeminiApiKeyInputSection.kt` | APIキー入力共通化 |
+| `MainActivity.kt` | 初回ゲート、deep link 例外 |
+| `CameraScreen.kt` | APIキー未設定バナー |
+| `SettingsScreen.kt` | 共通 Composable 利用 |
+| `ui/permissions/CameraPermission.kt` | `autoRequest` パラメータ |
 
 ---
 
 ## 技術メモ（ハマりどころ）
 
 - **サーバーレス**: Ktor 等のバックエンドなし。Gemini は OkHttp で Android から直呼び。
-- **APIキー**: `GeminiApiKeyStore`（EncryptedSharedPreferences）。再送信のみ `ApiKeyMissing` ガードあり。**初回送信は未ガード（7.3）**。
-- **解析キュー**: `AnalysisWorker` + `analysis_queue`。キー無し時は現状サイレント終了。
-- **ブランチ命名**: `feat/phase5` 等に合わせ、次は `feat/phase7` 想定。
+- **APIキー**: `GeminiApiKeyStore`（EncryptedSharedPreferences）。送信時ガード（7.3）+ オンボーディング + カメラバナー。
+- **解析キュー**: `AnalysisWorker` + `analysis_queue`。キー無し時は `FAILED`（7.3）。
+- **オンボーディング**: 未完了時は NavHost を出さず Wizard のみ。通知 deep link は Wizard スキップ。
 - **コミット**: ユーザー明示時のみ。`temp1209` / `75376279+temp1209@users.noreply.github.com`（git config 未設定環境では env で指定）。
 - **開発環境**: `JAVA_HOME` = Android Studio JBR。実機 Pixel 8a。データ退避 `scripts/dev-pull-device-data.ps1`。
 
@@ -76,11 +88,12 @@
 
 ## 直近の git（参考）
 
-`feat/phase6` 主要コミット:
+`main` 直近コミット（push 前の可能性あり）:
 
-- `d23826e` fix(nav)
-- `335098e` fix(notifications) アイコン
-- `c3732a9` / `b982ebd` 手動再送信
-- `c18533f` 修正画面本格化
-- `6ec6775` / `3afa6ce` necessityScore
-- `9e8414d` Phase 7 ドキュメント + 日報
+- `b493c16` docs: 月次リマインド UI簡素化
+- `8bd7f1a` refactor(backup): 月次リマインド2ボタン化
+- `3bdd80d` docs: 手動バックアップ移行
+- `3a3bdc4` refactor(backup): Drive廃止・手動JSON
+- `9802557` feat(phase7): APIキーガードと Drive v2（履歴）
+
+未コミット: 7.2' 残差 + 7.1 オンボーディング一式

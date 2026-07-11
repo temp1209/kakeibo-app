@@ -3,7 +3,7 @@
 実機利用や開発中に気づいた、**未対応または要件に未明文化**の項目を集約する。  
 実装タスクの詳細は [`IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](IMPLEMENTATION_PLAN_REVISED_2026-06-16.md) の **Phase 7** を参照。
 
-最終更新: 2026-06-16
+最終更新: 2026-07-11
 
 ---
 
@@ -11,26 +11,28 @@
 
 | 項目 | 内容 |
 |------|------|
-| **状態** | 未着手（要件に断片はあるがタスク化されていない） |
+| **状態** | ✅ 解決済み（2026-07-11、Phase 7.1） |
 | **発見** | 2026-06-16 実利用 |
 
-### 症状・ギャップ
+### 症状・ギャップ（解決前）
 
 - 初回起動時に **チュートリアル / セットアップウィザード** がない
 - **Gemini API キー** は要件上「初回起動で入力」とあるが、起動直後の誘導はなく **設定タブを自分で開く** 必要がある
 - **カメラ権限**・**通知権限（Android 13+）** の説明付きリクエストフローが体系化されていない
 - 上記が実装計画のチェックリストとして明文化されていなかった
 
+### 実装
+
+- `OnboardingPrefs` + `OnboardingWizard`（5ステップ: ようこそ → APIキー → カメラ → 通知 → 完了）
+- `MainActivity` で初回ゲート。通知 deep link 時は Wizard スキップ
+- `GeminiApiKeyInputSection` で設定と入力 UI 共通化
+- カメラタブに APIキー未設定バナー（設定タブへ導線）
+- 詳細: [`ONBOARDING_IMPLEMENTATION_PLAN.md`](ONBOARDING_IMPLEMENTATION_PLAN.md)
+
 ### 関連
 
-- 要件: `REQUIREMENTS.md` §10（APIキー）、§3（通知・カメラ）
-- 現状 UI: `SettingsScreen.kt`（APIキーは設定のみ）、`CameraPermission.kt`
-
-### 望ましい対応（案）
-
-- [ ] 初回起動フラグ（DataStore 等）で **1回限りのオンボーディング** を表示
-- [ ] ステップ例: ようこそ → APIキー入力（スキップ可だが警告）→ カメラ許可 → 通知許可 → 完了
-- [ ] APIキー未設定のままカメラ利用時は設定へ誘導（§3 と連動）
+- 要件: `REQUIREMENTS.md` §14（オンボーディング）、§10（APIキー）、§3（通知・カメラ）
+- UI: `OnboardingWizard.kt`, `SettingsScreen.kt`, `CameraScreen.kt`
 
 ---
 
