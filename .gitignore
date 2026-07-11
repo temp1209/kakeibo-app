@@ -40,3 +40,9 @@ google-services.json
 
 # Dev device data pulls (see scripts/dev-pull-device-data.ps1)
 backups/
+
+# Cursor local / personal settings (rules, MCP config, etc.)
+.cursor/
+
+# CodeGraph local index (regenerate with: codegraph init)
+.codegraph/
