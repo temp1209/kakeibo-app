@@ -56,7 +56,11 @@ import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import work.temp1209.kakeibo.ui.analysis.AnalysisScreen
 import work.temp1209.kakeibo.ui.review.ReceiptReviewScreen
-import work.temp1209.kakeibo.data.work.DriveBackupScheduler
+import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
+import work.temp1209.kakeibo.data.backup.MonthlyBackupPromptPolicy
+import work.temp1209.kakeibo.ui.backup.MonthlyBackupPromptDialog
+import work.temp1209.kakeibo.ui.backup.recordMonthlyPromptDismissed
+import work.temp1209.kakeibo.ui.backup.rememberFileBackupUi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.YearMonth
@@ -134,12 +138,19 @@ private fun AppNav(
     val context = LocalContext.current
     val repo = remember { ReceiptRepository(context) }
     val scope = rememberCoroutineScope()
+    val fileBackup = rememberFileBackupUi(
+        onMessage = { message ->
+            scope.launch {
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            }
+        },
+    )
+    val backupPrefs = remember { FileBackupPrefs(context) }
+    var showMonthlyBackupPrompt by remember { mutableStateOf(false) }
     var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
-    // 要件: 起動時に40日超過画像を掃除（冪等）
     LaunchedEffect(Unit) {
         repo.cleanupExpiredImages()
-        DriveBackupScheduler.schedule(context)
     }
 
     LaunchedEffect(deepLinkReceiptId) {
@@ -156,6 +167,15 @@ private fun AppNav(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+
+    val isOnListTab = currentDestination?.hierarchy?.any { it.route == Route.List.value } == true
+    LaunchedEffect(isOnListTab) {
+        if (!isOnListTab) return@LaunchedEffect
+        if (MonthlyBackupPromptPolicy.shouldShow(context, backupPrefs)) {
+            showMonthlyBackupPrompt = true
+            backupPrefs.setLastPromptShownYearMonth(YearMonth.now().toString())
+        }
+    }
 
     var listPeriodKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var listLastMonthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
@@ -266,6 +286,19 @@ private fun AppNav(
                     TextButton(onClick = { showApiKeyMissingDialog = false }) {
                         androidx.compose.material3.Text("キャンセル")
                     }
+                },
+            )
+        }
+
+        if (showMonthlyBackupPrompt) {
+            MonthlyBackupPromptDialog(
+                onExport = {
+                    showMonthlyBackupPrompt = false
+                    fileBackup.launchExport()
+                },
+                onDismiss = { dismissForMonth ->
+                    showMonthlyBackupPrompt = false
+                    recordMonthlyPromptDismissed(backupPrefs, dismissForMonth)
                 },
             )
         }
@@ -427,7 +460,11 @@ private fun AppNav(
                 )
             }
             composable(Route.Settings.value) {
-                SettingsScreen(contentPadding = PaddingValues(0.dp))
+                SettingsScreen(
+                    contentPadding = PaddingValues(0.dp),
+                    fileBackup = fileBackup,
+                    backupPrefs = backupPrefs,
+                )
             }
 
             composable(
