@@ -1,14 +1,16 @@
 # エージェント引き継ぎメモ
 
-**最終更新**: 2026-06-16  
-**ブランチ**: `main`（`feat/phase6` マージ後を想定）
+**最終更新**: 2026-07-11  
+**ブランチ**: `main`（7.2' 手動バックアップは作業ツリー未コミット）
 
 ---
 
 ## いま何をしているか
 
-- **Phase 6（実利用フィードバック対応）は完了**し、`feat/phase6` → `main` へマージする段階。
-- **次の実装は Phase 7**（`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md` が現行計画）。
+- **Phase 6 は `main` にマージ済み**（PR #2）。
+- **Phase 7.3（APIキーガード）完了**（`9802557`）。
+- **Phase 7.2（Drive）は廃止** → **7.2' 手動 JSON バックアップ**に移行（エクスポート・リマインドは実機確認済み、未コミット）。
+- **次の実装は Phase 7.1 オンボーディング**（`docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md` が現行計画）。
 
 ---
 
@@ -21,34 +23,30 @@
 | 6.3 | 修正画面フル編集（`ExpenseLineEditor` 共通化、`applyReceiptEdit`） |
 | 6.4 | necessityScore プロンプト改訂 + 回帰フィクスチャ |
 | 6.5 | 通知アイコン `ic_notification.xml` |
+| 7.3 | APIキー未設定時の送信ガード |
+| 7.2' | 手動 JSON バックアップ + 月次リマインド（エクスポート・リマインド実機確認済み、未コミット） |
 
-実機確認済み: 6.2, 6.3（ユーザー報告）
+実機確認済み: 6.2, 6.3, 7.2'（エクスポート・月次リマインド）
 
 ---
 
 ## 次にやること（優先順）
 
-1. **Phase 7.3** — APIキー未設定時の送信ガード  
-   - `PreviewScreen` / `MainActivity` で `hasKey()` チェック  
-   - `AnalysisWorker`: キー未設定時のサイレント `Result.success()` を廃止 → `FAILED` + メッセージ  
-   - 詳細: `docs/KNOWN_ISSUES.md` §3
+1. **7.2' コミット** — エクスポート・月次リマインドは実機確認済み  
+2. **復元フロー実機スモーク**（任意）— 削除 → インポート → 件数確認
 
-2. **Phase 7.2** — Drive バックアップ 403  
-   - まず SHA-1 切り分け（`EXTERNAL_SETUP.md` §6）  
-   - `DriveBackupWorker` の 403 握りつぶし修正  
-   - 詳細: `docs/KNOWN_ISSUES.md` §2
+3. **Phase 7.1** — 初回オンボーディング（Drive 節なしの軽量ウィザード）
 
-3. **Phase 7.1** — 初回オンボーディング（7.3 の後がよい）
+4. **ドキュメント同期** — `REQUIREMENTS.md`, `KNOWN_ISSUES.md` のバックアップ記述
 
-4. **Phase 5 残** — 解析状態可視化、通知履歴永続化、Gemini JSON 改善
-
----
+5. **Phase 5 残** — 解析状態可視化、通知履歴永続化、Gemini JSON 改善
 
 ## 重要ファイル
 
 | 用途 | パス |
 |------|------|
-| **現行実装計画** | `docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md` |
+| **現行実装計画** | `docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md` |
+| バックアップ移行 | `docs/BACKUP_MANUAL_MIGRATION_PLAN.md` |
 | 既知の課題 | `docs/KNOWN_ISSUES.md` |
 | 要件・ギャップ | `docs/REQUIREMENTS.md`（末尾「実装ギャップ」） |
 | 日報（Phase 6） | `docs/daily/2026-06-15.md` |
