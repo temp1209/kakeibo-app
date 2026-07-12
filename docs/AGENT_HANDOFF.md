@@ -8,12 +8,11 @@
 
 ## いま何をしているか
 
-**Phase 9 必須度ポリシー** — **実装完了**。残りは実機スモークと PR マージ。
+**Phase 9 必須度ポリシー** — **完了**（実機確認済み・`main` マージ済み）。
 
 | 優先 | タスク | 状態 |
 |------|--------|------|
-| **1** | Phase **9** 実機確認 → PR | 実装済み・実機待ち |
-| — | Phase **5.1** プロンプトチューニング | 実利用並行（別 PR） |
+| — | Phase **5.1** プロンプトチューニング | 実利用並行 |
 | — | `NecessityPresetTemplates` 境界ケース数値 | 実利用しながら調整 |
 
 詳細計画: [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md)  
@@ -47,6 +46,6 @@
 
 ## 推奨セッション開始手順
 
-1. `git checkout feat/phase9-necessity-policy`
-2. [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md) §8 テスト手順で実機確認
-3. 問題なければ PR 作成・マージ
+1. `git checkout main` && `git pull`
+2. 実利用しながら 5.1（`docs/fixtures/` + `ReceiptAnalysisPrompt`）
+3. 必要なら `NecessityPresetTemplates` の境界ケース数値を調整
