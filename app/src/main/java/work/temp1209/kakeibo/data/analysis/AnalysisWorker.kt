@@ -12,6 +12,8 @@ import work.temp1209.kakeibo.data.db.ReceiptDao
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
+import work.temp1209.kakeibo.data.gemini.GeminiResponseParser
+import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import work.temp1209.kakeibo.data.db.AppDatabase
@@ -201,7 +203,7 @@ class AnalysisWorker(
                 )
                 Log.d(TAG, "done receiptId=${entry.receiptId} status=$receiptStatus subtotal=$subtotal adjustment=$adjustment")
             } catch (e: Exception) {
-                val msg = userFacingErrorMessage(e)
+                val msg = GeminiUserMessages.userFacingError(e, GeminiUserMessages.Operation.RECEIPT_ANALYSIS)
                 Log.w(TAG, "failed receiptId=${entry.receiptId} attempt=$attempt error=$msg", e)
                 val finishedAt = Instant.now().toString()
                 val existing = dao.getReceiptOrNull(entry.receiptId)
@@ -337,35 +339,8 @@ class AnalysisWorker(
         }
     }
 
-    private fun userFacingErrorMessage(e: Exception): String {
-        val msg = e.message.orEmpty()
-        return when {
-            msg.contains("timeout", ignoreCase = true) ->
-                "通信がタイムアウトしました。しばらく待ってから再送信してください。"
-            msg.contains("429") || msg.contains("quota", ignoreCase = true) ->
-                "APIの利用上限に達した可能性があります。時間をおいて再送信してください。"
-            msg.contains("receipt image missing", ignoreCase = true) ||
-                msg.contains("failed to read image", ignoreCase = true) ->
-                "画像ファイルが見つかりません。再撮影するか削除してください。"
-            msg.contains("no candidates", ignoreCase = true) ||
-                msg.contains("empty response", ignoreCase = true) ->
-                "AIから有効な応答がありませんでした。再送信をお試しください。"
-            else -> "解析に失敗しました: ${e.message ?: "不明なエラー"}"
-        }
-    }
-
-    private fun extractStrictJson(rawResponse: String): String {
-        // generateContent response: candidates[0].content.parts[0].text
-        val root = JSONObject(rawResponse)
-        val candidates = root.getJSONArray("candidates")
-        if (candidates.length() == 0) error("no candidates")
-        val content = candidates.getJSONObject(0).getJSONObject("content")
-        val parts = content.getJSONArray("parts")
-        if (parts.length() == 0) error("no parts")
-        val text = parts.getJSONObject(0).optString("text")
-        if (text.isBlank()) error("empty response text")
-        return text.trim()
-    }
+    private fun extractStrictJson(rawResponse: String): String =
+        GeminiResponseParser.extractResponseText(rawResponse)
 
     companion object {
         /**

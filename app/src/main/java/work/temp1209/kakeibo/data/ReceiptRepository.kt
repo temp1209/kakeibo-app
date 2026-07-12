@@ -25,9 +25,9 @@ import work.temp1209.kakeibo.data.domain.NecessityUtils
 import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
 import work.temp1209.kakeibo.data.necessity.CompiledNecessityPolicy
 import work.temp1209.kakeibo.data.necessity.NecessityCorrection
-import work.temp1209.kakeibo.data.necessity.NecessityCorrectionDirection
 import work.temp1209.kakeibo.data.necessity.NecessityPolicyCompiler
 import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
+import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import java.io.File
@@ -613,12 +613,59 @@ class ReceiptRepository(private val context: Context) {
 
     fun necessityPolicyStore(): NecessityPolicyStore = NecessityPolicyStore(context)
 
-    suspend fun addNecessityCorrection(
-        phrase: String,
-        direction: NecessityCorrectionDirection,
-        sourceItemName: String? = null,
-    ): NecessityCorrection = withContext(Dispatchers.IO) {
-        necessityPolicyStore().addCorrection(phrase, direction, sourceItemName)
+    suspend fun recordNecessityCorrections(
+        edits: List<NecessityCorrectionEdit>,
+    ) = withContext(Dispatchers.IO) {
+        if (edits.isEmpty()) return@withContext
+        val store = necessityPolicyStore()
+        val now = Instant.now().toString()
+        val incoming = edits.map { edit ->
+            NecessityCorrection(
+                correctionId = UUID.randomUUID().toString(),
+                phrase = NecessityPolicyStore.normalizePhrase(edit.itemName),
+                scoreBefore = edit.scoreBefore.coerceIn(0, 100),
+                scoreAfter = edit.scoreAfter.coerceIn(0, 100),
+                receiptId = edit.receiptId,
+                merchantName = edit.merchantName?.trim()?.take(80)?.ifBlank { null },
+                sourceItemName = edit.itemName.trim().take(120),
+                createdAt = now,
+            )
+        }
+        store.addCorrections(incoming)
+    }
+
+    data class NecessityCorrectionEdit(
+        val itemName: String,
+        val scoreBefore: Int,
+        val scoreAfter: Int,
+        val receiptId: String,
+        val merchantName: String?,
+    )
+
+    data class CorrectionReceiptGroup(
+        val receiptId: String?,
+        val merchantLabel: String,
+        val corrections: List<NecessityCorrection>,
+    )
+
+    suspend fun groupCorrectionsByReceipt(
+        corrections: List<NecessityCorrection>,
+    ): List<CorrectionReceiptGroup> = withContext(Dispatchers.IO) {
+        corrections
+            .groupBy { it.receiptId.orEmpty() }
+            .map { (receiptIdKey, items) ->
+                val receiptId = receiptIdKey.takeIf { it.isNotBlank() }
+                val receipt = receiptId?.let { getReceiptOrNull(it) }
+                val merchantLabel = items.firstNotNullOfOrNull { it.merchantName?.takeIf { n -> n.isNotBlank() } }
+                    ?: receipt?.merchantName?.takeIf { it.isNotBlank() }
+                    ?: "（店名不明）"
+                CorrectionReceiptGroup(
+                    receiptId = receiptId,
+                    merchantLabel = merchantLabel,
+                    corrections = items.sortedByDescending { it.createdAt },
+                )
+            }
+            .sortedByDescending { group -> group.corrections.maxOfOrNull { it.createdAt }.orEmpty() }
     }
 
     suspend fun removeNecessityCorrection(correctionId: String) = withContext(Dispatchers.IO) {
@@ -636,14 +683,25 @@ class ReceiptRepository(private val context: Context) {
             val apiKey = GeminiApiKeyStore(context).readKeyOrNull()
                 ?: return@withContext CompileNecessityPolicyResult.ApiKeyMissing
             val store = necessityPolicyStore()
-            store.setPurposeId(purposeId)
             val corrections = store.listCorrections()
+            val existing = store.getCompiledPolicyOrNull()
             runCatching {
-                val policy = NecessityPolicyCompiler().compileAndSave(store, apiKey, purposeId, corrections)
-                CompileNecessityPolicyResult.Success(policy)
+                val preview = NecessityPolicyCompiler().buildPreview(
+                    purposeId = purposeId,
+                    corrections = corrections,
+                    existingPolicy = existing,
+                    apiKey = apiKey,
+                )
+                CompileNecessityPolicyResult.Success(preview)
             }.getOrElse {
-                CompileNecessityPolicyResult.Failure(it.message ?: it.javaClass.simpleName)
+                CompileNecessityPolicyResult.Failure(GeminiUserMessages.policyCompileFailure(it))
             }
+        }
+
+    suspend fun commitNecessityPolicy(preview: CompiledNecessityPolicy): CompiledNecessityPolicy =
+        withContext(Dispatchers.IO) {
+            val store = necessityPolicyStore()
+            NecessityPolicyCompiler().commitCompiledPolicy(store, preview)
         }
 
     fun scheduleNecessityRescore() {

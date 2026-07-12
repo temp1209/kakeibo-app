@@ -11,9 +11,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,10 +40,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.analysis.NecessityRescoreWorker
+import work.temp1209.kakeibo.data.necessity.CompiledNecessityPolicy
 import work.temp1209.kakeibo.data.necessity.NecessityCorrection
 import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NecessityPolicySection(
     repo: ReceiptRepository,
@@ -51,14 +57,20 @@ fun NecessityPolicySection(
     val scope = rememberCoroutineScope()
 
     var purposeId by remember { mutableStateOf(store.getPurposeId()) }
+    var purposeMenuExpanded by remember { mutableStateOf(false) }
     var summary by remember { mutableStateOf(store.getEffectiveSummary()) }
     var corrections by remember { mutableStateOf(store.listCorrections()) }
+    var correctionGroups by remember {
+        mutableStateOf<List<ReceiptRepository.CorrectionReceiptGroup>>(emptyList())
+    }
     var pending by remember { mutableStateOf(store.hasPendingCorrections()) }
     var promptBlock by remember { mutableStateOf(store.getEffectivePromptBlock()) }
     var compiling by remember { mutableStateOf(false) }
     var rescoreRunning by remember { mutableStateOf(false) }
     var showFullPolicy by remember { mutableStateOf(false) }
     var showRescoreOffer by remember { mutableStateOf(false) }
+    var pendingPolicyConfirm by remember { mutableStateOf<CompiledNecessityPolicy?>(null) }
+    var lastRescoreWorkState by remember { mutableStateOf<WorkInfo.State?>(null) }
 
     fun refresh() {
         purposeId = store.getPurposeId()
@@ -68,13 +80,26 @@ fun NecessityPolicySection(
         promptBlock = store.getEffectivePromptBlock()
     }
 
+    LaunchedEffect(corrections) {
+        correctionGroups = withContext(Dispatchers.IO) {
+            repo.groupCorrectionsByReceipt(corrections)
+        }
+    }
+
     LaunchedEffect(Unit) {
         WorkManager.getInstance(context)
             .getWorkInfosForUniqueWorkFlow(NecessityRescoreWorker.UNIQUE_WORK_NAME)
             .collect { infos ->
-                rescoreRunning = infos.any {
-                    it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+                val info = infos.firstOrNull()
+                val state = info?.state
+                rescoreRunning = state == WorkInfo.State.RUNNING || state == WorkInfo.State.ENQUEUED
+                if (lastRescoreWorkState != WorkInfo.State.FAILED && state == WorkInfo.State.FAILED) {
+                    val err = info?.outputData?.getString(NecessityRescoreWorker.KEY_ERROR_MESSAGE)
+                    if (!err.isNullOrBlank()) {
+                        onShowMessage(err)
+                    }
                 }
+                lastRescoreWorkState = state
             }
     }
 
@@ -99,17 +124,33 @@ fun NecessityPolicySection(
             }
         }
 
-        Text("目的プリセット", style = MaterialTheme.typography.labelLarge)
-        NecessityPurposeId.entries.forEach { option ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
+        ExposedDropdownMenuBox(
+            expanded = purposeMenuExpanded,
+            onExpandedChange = { purposeMenuExpanded = !purposeMenuExpanded },
+        ) {
+            OutlinedTextField(
+                value = purposeId.label,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("目的プリセット") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = purposeMenuExpanded) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+            )
+            DropdownMenu(
+                expanded = purposeMenuExpanded,
+                onDismissRequest = { purposeMenuExpanded = false },
             ) {
-                RadioButton(
-                    selected = purposeId == option,
-                    onClick = { purposeId = option },
-                )
-                Text(option.label, modifier = Modifier.padding(start = 4.dp))
+                NecessityPurposeId.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        onClick = {
+                            purposeId = option
+                            purposeMenuExpanded = false
+                        },
+                    )
+                }
             }
         }
 
@@ -123,21 +164,37 @@ fun NecessityPolicySection(
             }
         }
 
-        if (corrections.isNotEmpty()) {
+        if (correctionGroups.isNotEmpty()) {
             Text("訂正例", style = MaterialTheme.typography.labelLarge)
-            corrections.forEach { correction ->
-                CorrectionRow(
-                    correction = correction,
-                    onRemove = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) { repo.removeNecessityCorrection(correction.correctionId) }
-                            refresh()
+            correctionGroups.forEach { group ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            group.merchantLabel,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        group.corrections.forEach { correction ->
+                            CorrectionRow(
+                                correction = correction,
+                                onRemove = {
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) {
+                                            repo.removeNecessityCorrection(correction.correctionId)
+                                        }
+                                        refresh()
+                                    }
+                                },
+                            )
                         }
-                    },
-                )
+                    }
+                }
             }
         } else {
-            Text("訂正例はまだありません。明細画面から追加できます。", style = MaterialTheme.typography.bodySmall)
+            Text("訂正例はまだありません。レシート修正画面で必須度を変更すると自動で追加されます。", style = MaterialTheme.typography.bodySmall)
         }
 
         Button(
@@ -162,12 +219,10 @@ fun NecessityPolicySection(
                             onOpenApiKeySection()
                         }
                         is ReceiptRepository.CompileNecessityPolicyResult.Failure -> {
-                            onShowMessage("コンパイル失敗: ${result.message}")
+                            onShowMessage(result.message)
                         }
                         is ReceiptRepository.CompileNecessityPolicyResult.Success -> {
-                            refresh()
-                            onShowMessage("方針を保存しました")
-                            showRescoreOffer = true
+                            pendingPolicyConfirm = result.policy
                         }
                     }
                 }
@@ -217,6 +272,49 @@ fun NecessityPolicySection(
         )
     }
 
+    pendingPolicyConfirm?.let { preview ->
+        AlertDialog(
+            onDismissRequest = { pendingPolicyConfirm = null },
+            title = { Text("新しい必須度の方針") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(preview.userSummary, style = MaterialTheme.typography.bodyMedium)
+                    if (preview.userRulesBlock.isNotBlank()) {
+                        Text("判定ルール", style = MaterialTheme.typography.labelMedium)
+                        Text(preview.userRulesBlock, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(
+                        "この方針でよろしいですか？ OK を押すと訂正例はクリアされます。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val policy = preview
+                        pendingPolicyConfirm = null
+                        scope.launch {
+                            withContext(Dispatchers.IO) { repo.commitNecessityPolicy(policy) }
+                            refresh()
+                            onShowMessage("方針を保存しました")
+                            showRescoreOffer = true
+                        }
+                    },
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingPolicyConfirm = null }) { Text("キャンセル") }
+            },
+        )
+    }
+
     if (showRescoreOffer) {
         AlertDialog(
             onDismissRequest = { showRescoreOffer = false },
@@ -243,21 +341,19 @@ private fun CorrectionRow(
     correction: NecessityCorrection,
     onRemove: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("「${correction.phrase}」→ ${correction.direction.toPromptLabel()}")
-                correction.sourceItemName?.let {
-                    Text("元: $it", style = MaterialTheme.typography.labelSmall)
-                }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("「${correction.phrase}」: ${correction.scoreBefore} → ${correction.scoreAfter}")
+            correction.sourceItemName?.let {
+                Text("商品: $it", style = MaterialTheme.typography.labelSmall)
             }
-            TextButton(onClick = onRemove) { Text("削除") }
         }
+        TextButton(onClick = onRemove) { Text("削除") }
     }
 }

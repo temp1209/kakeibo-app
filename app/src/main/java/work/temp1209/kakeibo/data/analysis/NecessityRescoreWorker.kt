@@ -4,11 +4,12 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import org.json.JSONArray
+import androidx.work.workDataOf
 import org.json.JSONObject
 import work.temp1209.kakeibo.data.db.AppDatabase
-import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
+import work.temp1209.kakeibo.data.gemini.GeminiResponseParser
+import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.necessity.NecessityRescorePrompt
 import work.temp1209.kakeibo.data.necessity.NecessityRescoreSchema
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
@@ -25,7 +26,9 @@ class NecessityRescoreWorker(
         val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull()
         if (apiKey == null) {
             Log.w(TAG, "api key missing")
-            return Result.failure()
+            return Result.failure(
+                workDataOf(KEY_ERROR_MESSAGE to GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE),
+            )
         }
 
         val store = NecessityPolicyStore(applicationContext)
@@ -43,6 +46,7 @@ class NecessityRescoreWorker(
         val chunks = allItems.chunked(chunkSize)
         Log.d(TAG, "rescore start month=$yearMonth items=${allItems.size} chunks=${chunks.size}")
 
+        var updatedCount = 0
         try {
             for ((index, chunk) in chunks.withIndex()) {
                 val prompt = NecessityRescorePrompt.build(chunk, policyBlock)
@@ -51,18 +55,20 @@ class NecessityRescoreWorker(
                     prompt = prompt,
                     responseJsonSchema = NecessityRescoreSchema.responseSchema(),
                 )
-                val scores = parseScores(extractResponseText(raw))
+                val scores = parseScores(GeminiResponseParser.extractResponseText(raw))
                 val byId = scores.associateBy { it.itemId }
                 val updated = chunk.map { item ->
                     val score = byId[item.itemId]?.necessityScore ?: item.necessityScore
                     item.copy(necessityScore = score.coerceIn(0, 100))
                 }
                 dao.upsertReceiptItems(updated)
+                updatedCount += updated.size
                 Log.d(TAG, "rescore chunk ${index + 1}/${chunks.size} updated=${updated.size}")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "rescore failed", e)
-            return Result.failure()
+            val msg = GeminiUserMessages.necessityRescoreFailure(e, updatedCount)
+            Log.w(TAG, "rescore failed updatedSoFar=$updatedCount", e)
+            return Result.failure(workDataOf(KEY_ERROR_MESSAGE to msg))
         }
 
         return Result.success()
@@ -84,20 +90,9 @@ class NecessityRescoreWorker(
         return out
     }
 
-    private fun extractResponseText(rawResponse: String): String {
-        val root = JSONObject(rawResponse)
-        val candidates = root.getJSONArray("candidates")
-        if (candidates.length() == 0) error("no candidates")
-        val content = candidates.getJSONObject(0).getJSONObject("content")
-        val parts = content.getJSONArray("parts")
-        if (parts.length() == 0) error("no parts")
-        val text = parts.getJSONObject(0).optString("text")
-        if (text.isBlank()) error("empty response text")
-        return text.trim()
-    }
-
     companion object {
         const val UNIQUE_WORK_NAME = "necessity_rescore_current_month"
+        const val KEY_ERROR_MESSAGE = "error_message"
         private const val TAG = "NecessityRescoreWorker"
     }
 }

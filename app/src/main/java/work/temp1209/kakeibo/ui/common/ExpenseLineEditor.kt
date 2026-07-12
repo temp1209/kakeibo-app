@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.domain.CategoryCatalog
+import work.temp1209.kakeibo.data.domain.NecessityUtils
 
 data class ExpenseLineState(
     val itemName: String,
@@ -148,9 +149,11 @@ fun ExpenseLineEditorCard(
             Text("必須度: ${state.necessityScore}", style = MaterialTheme.typography.bodySmall)
             Slider(
                 value = state.necessityScore.toFloat(),
-                onValueChange = { onChange(state.copy(necessityScore = it.toInt().coerceIn(0, 100))) },
+                onValueChange = {
+                    onChange(state.copy(necessityScore = NecessityUtils.snapScore(it.toInt())))
+                },
                 valueRange = 0f..100f,
-                steps = 99,
+                steps = (100 / NecessityUtils.SCORE_STEP) - 1,
             )
         }
     }

@@ -524,9 +524,6 @@ private fun AppNav(
                     },
                     onResendAnalysis = { id -> repo.resendAnalysis(id) },
                     onOpenSettings = { navController.navigateToTabRoot(Route.Settings.value) },
-                    onAddNecessityCorrection = { phrase, direction, source ->
-                        repo.addNecessityCorrection(phrase, direction, source)
-                    },
                 )
             }
         }

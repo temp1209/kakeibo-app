@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.gemini.GeminiClient
+import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
@@ -107,7 +108,12 @@ fun SettingsScreen(
                         }
                     }.fold(
                         onSuccess = { "疎通OK" },
-                        onFailure = { "疎通NG: ${it.message ?: it.javaClass.simpleName}" },
+                        onFailure = {
+                            GeminiUserMessages.userFacingError(
+                                it,
+                                GeminiUserMessages.Operation.CONNECTIVITY_TEST,
+                            )
+                        },
                     )
                     snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
                     testing = false

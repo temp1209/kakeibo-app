@@ -27,4 +27,9 @@ object NecessityUtils {
         val v = weighted ?: return "—"
         return if (v >= 50.0) "必須寄り" else "裁量寄り"
     }
+
+    const val SCORE_STEP = 5
+
+    fun snapScore(score: Int): Int =
+        ((score.coerceIn(0, 100) + SCORE_STEP / 2) / SCORE_STEP) * SCORE_STEP
 }

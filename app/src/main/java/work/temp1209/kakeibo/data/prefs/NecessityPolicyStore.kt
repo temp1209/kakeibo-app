@@ -5,7 +5,6 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import work.temp1209.kakeibo.data.necessity.CompiledNecessityPolicy
 import work.temp1209.kakeibo.data.necessity.NecessityCorrection
-import work.temp1209.kakeibo.data.necessity.NecessityCorrectionDirection
 import work.temp1209.kakeibo.data.necessity.NecessityPolicyMerger
 import work.temp1209.kakeibo.data.necessity.NecessityPresetTemplates
 import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
@@ -78,16 +77,22 @@ class NecessityPolicyStore(context: Context) {
 
     fun addCorrection(
         phrase: String,
-        direction: NecessityCorrectionDirection,
+        scoreBefore: Int,
+        scoreAfter: Int,
+        receiptId: String? = null,
+        merchantName: String? = null,
         sourceItemName: String? = null,
     ): NecessityCorrection {
         val normalized = normalizePhrase(phrase)
         val current = listCorrections().toMutableList()
-        current.removeAll { it.phrase == normalized && it.direction == direction }
+        current.removeAll { it.phrase == normalized && it.receiptId == receiptId }
         val correction = NecessityCorrection(
             correctionId = UUID.randomUUID().toString(),
             phrase = normalized,
-            direction = direction,
+            scoreBefore = scoreBefore.coerceIn(0, 100),
+            scoreAfter = scoreAfter.coerceIn(0, 100),
+            receiptId = receiptId,
+            merchantName = merchantName?.trim()?.take(80)?.ifBlank { null },
             sourceItemName = sourceItemName?.trim()?.take(120),
             createdAt = Instant.now().toString(),
         )
@@ -95,6 +100,20 @@ class NecessityPolicyStore(context: Context) {
         val trimmed = current.take(MAX_CORRECTIONS)
         saveCorrections(trimmed)
         return correction
+    }
+
+    fun addCorrections(corrections: List<NecessityCorrection>) {
+        if (corrections.isEmpty()) return
+        var current = listCorrections().toMutableList()
+        for (incoming in corrections) {
+            current.removeAll { it.phrase == incoming.phrase && it.receiptId == incoming.receiptId }
+            current.add(0, incoming)
+        }
+        saveCorrections(current.take(MAX_CORRECTIONS))
+    }
+
+    fun clearCorrections() {
+        saveCorrections(emptyList())
     }
 
     fun removeCorrection(correctionId: String) {
@@ -142,7 +161,7 @@ class NecessityPolicyStore(context: Context) {
         fun fingerprint(purposeId: NecessityPurposeId, corrections: List<NecessityCorrection>): String {
             val body = corrections
                 .sortedBy { it.correctionId }
-                .joinToString("|") { "${it.phrase}:${it.direction.name}" }
+                .joinToString("|") { "${it.receiptId.orEmpty()}:${it.phrase}:${it.scoreBefore}->${it.scoreAfter}" }
             return "${purposeId.name}#$body".hashCode().toString()
         }
     }
