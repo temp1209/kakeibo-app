@@ -12,6 +12,7 @@ import androidx.work.Constraints
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.analysis.AnalysisWorker
+import work.temp1209.kakeibo.data.analysis.NecessityRescoreWorker
 import work.temp1209.kakeibo.data.notifications.NotificationHistory
 import work.temp1209.kakeibo.data.notifications.NotificationHistoryEntry
 import work.temp1209.kakeibo.data.db.AppDatabase
@@ -22,7 +23,13 @@ import work.temp1209.kakeibo.data.db.ReceiptListRow
 import work.temp1209.kakeibo.data.domain.CategoryCatalog
 import work.temp1209.kakeibo.data.domain.NecessityUtils
 import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
+import work.temp1209.kakeibo.data.necessity.CompiledNecessityPolicy
+import work.temp1209.kakeibo.data.necessity.NecessityCorrection
+import work.temp1209.kakeibo.data.necessity.NecessityPolicyCompiler
+import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
+import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -602,6 +609,115 @@ class ReceiptRepository(private val context: Context) {
         scheduleAnalysisWork()
         Log.d(TAG, "resendAnalysis receiptId=$receiptId")
         ResendAnalysisResult.Success
+    }
+
+    fun necessityPolicyStore(): NecessityPolicyStore = NecessityPolicyStore(context)
+
+    suspend fun recordNecessityCorrections(
+        edits: List<NecessityCorrectionEdit>,
+    ) = withContext(Dispatchers.IO) {
+        if (edits.isEmpty()) return@withContext
+        val store = necessityPolicyStore()
+        val now = Instant.now().toString()
+        val incoming = edits.map { edit ->
+            NecessityCorrection(
+                correctionId = UUID.randomUUID().toString(),
+                phrase = NecessityPolicyStore.normalizePhrase(edit.itemName),
+                scoreBefore = edit.scoreBefore.coerceIn(0, 100),
+                scoreAfter = edit.scoreAfter.coerceIn(0, 100),
+                receiptId = edit.receiptId,
+                merchantName = edit.merchantName?.trim()?.take(80)?.ifBlank { null },
+                sourceItemName = edit.itemName.trim().take(120),
+                createdAt = now,
+            )
+        }
+        store.addCorrections(incoming)
+    }
+
+    data class NecessityCorrectionEdit(
+        val itemName: String,
+        val scoreBefore: Int,
+        val scoreAfter: Int,
+        val receiptId: String,
+        val merchantName: String?,
+    )
+
+    data class CorrectionReceiptGroup(
+        val receiptId: String?,
+        val merchantLabel: String,
+        val corrections: List<NecessityCorrection>,
+    )
+
+    suspend fun groupCorrectionsByReceipt(
+        corrections: List<NecessityCorrection>,
+    ): List<CorrectionReceiptGroup> = withContext(Dispatchers.IO) {
+        corrections
+            .groupBy { it.receiptId.orEmpty() }
+            .map { (receiptIdKey, items) ->
+                val receiptId = receiptIdKey.takeIf { it.isNotBlank() }
+                val receipt = receiptId?.let { getReceiptOrNull(it) }
+                val merchantLabel = items.firstNotNullOfOrNull { it.merchantName?.takeIf { n -> n.isNotBlank() } }
+                    ?: receipt?.merchantName?.takeIf { it.isNotBlank() }
+                    ?: "（店名不明）"
+                CorrectionReceiptGroup(
+                    receiptId = receiptId,
+                    merchantLabel = merchantLabel,
+                    corrections = items.sortedByDescending { it.createdAt },
+                )
+            }
+            .sortedByDescending { group -> group.corrections.maxOfOrNull { it.createdAt }.orEmpty() }
+    }
+
+    suspend fun removeNecessityCorrection(correctionId: String) = withContext(Dispatchers.IO) {
+        necessityPolicyStore().removeCorrection(correctionId)
+    }
+
+    sealed class CompileNecessityPolicyResult {
+        data class Success(val policy: CompiledNecessityPolicy) : CompileNecessityPolicyResult()
+        data object ApiKeyMissing : CompileNecessityPolicyResult()
+        data class Failure(val message: String) : CompileNecessityPolicyResult()
+    }
+
+    suspend fun compileNecessityPolicy(purposeId: NecessityPurposeId): CompileNecessityPolicyResult =
+        withContext(Dispatchers.IO) {
+            val apiKey = GeminiApiKeyStore(context).readKeyOrNull()
+                ?: return@withContext CompileNecessityPolicyResult.ApiKeyMissing
+            val store = necessityPolicyStore()
+            val corrections = store.listCorrections()
+            val existing = store.getCompiledPolicyOrNull()
+            runCatching {
+                val preview = NecessityPolicyCompiler().buildPreview(
+                    purposeId = purposeId,
+                    corrections = corrections,
+                    existingPolicy = existing,
+                    apiKey = apiKey,
+                )
+                CompileNecessityPolicyResult.Success(preview)
+            }.getOrElse {
+                CompileNecessityPolicyResult.Failure(GeminiUserMessages.policyCompileFailure(it))
+            }
+        }
+
+    suspend fun commitNecessityPolicy(preview: CompiledNecessityPolicy): CompiledNecessityPolicy =
+        withContext(Dispatchers.IO) {
+            val store = necessityPolicyStore()
+            NecessityPolicyCompiler().commitCompiledPolicy(store, preview)
+        }
+
+    fun scheduleNecessityRescore() {
+        Log.d(TAG, "scheduleNecessityRescore enqueueUniqueWork(${NecessityRescoreWorker.UNIQUE_WORK_NAME})")
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = OneTimeWorkRequestBuilder<NecessityRescoreWorker>()
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                NecessityRescoreWorker.UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                request,
+            )
     }
 
     private suspend fun isReceiptImageReadable(receiptId: String): Boolean {

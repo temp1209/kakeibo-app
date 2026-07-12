@@ -484,6 +484,7 @@ private fun AppNav(
             composable(Route.Settings.value) {
                 SettingsScreen(
                     contentPadding = PaddingValues(0.dp),
+                    repo = repo,
                     fileBackup = fileBackup,
                     backupPrefs = backupPrefs,
                 )

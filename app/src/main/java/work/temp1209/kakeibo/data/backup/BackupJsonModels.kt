@@ -1,15 +1,18 @@
 package work.temp1209.kakeibo.data.backup
 
 import com.google.gson.annotations.SerializedName
+import work.temp1209.kakeibo.data.necessity.CompiledNecessityPolicy
+import work.temp1209.kakeibo.data.necessity.NecessityCorrection
 
 data class KakeiboBackupFile(
-    @SerializedName("backupSchemaVersion") val backupSchemaVersion: String = "1.1",
+    @SerializedName("backupSchemaVersion") val backupSchemaVersion: String = "1.2",
     @SerializedName("exportType") val exportType: String,
     @SerializedName("exportedAt") val exportedAt: String,
     @SerializedName("rangeStart") val rangeStart: String,
     @SerializedName("rangeEnd") val rangeEnd: String,
     @SerializedName("app") val app: BackupAppInfo,
     @SerializedName("data") val data: BackupDataPayload,
+    @SerializedName("necessityPolicy") val necessityPolicy: NecessityPolicyBackupDto? = null,
 )
 
 data class BackupAppInfo(
@@ -62,3 +65,9 @@ object BackupExportTypes {
     const val ARCHIVE_MONTH = "ARCHIVE_MONTH"
     const val FULL_SNAPSHOT = "FULL_SNAPSHOT"
 }
+
+data class NecessityPolicyBackupDto(
+    @SerializedName("purposeId") val purposeId: String,
+    @SerializedName("corrections") val corrections: List<NecessityCorrection>,
+    @SerializedName("compiledPolicy") val compiledPolicy: CompiledNecessityPolicy?,
+)

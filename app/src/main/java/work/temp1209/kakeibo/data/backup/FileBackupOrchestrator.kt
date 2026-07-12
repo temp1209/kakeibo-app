@@ -4,6 +4,8 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.db.AppDatabase
+import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
+import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -22,6 +24,12 @@ object FileBackupOrchestrator {
         val earliest = receipts
             .mapNotNull { runCatching { Instant.parse(it.createdAt) }.getOrNull() }
             .minOrNull() ?: Instant.EPOCH
+        val policySnapshot = NecessityPolicyStore(context).exportSnapshot()
+        val policyDto = NecessityPolicyBackupDto(
+            purposeId = policySnapshot.purposeId.name,
+            corrections = policySnapshot.corrections,
+            compiledPolicy = policySnapshot.compiledPolicy,
+        )
         val file = BackupExportBuilder.buildFile(
             context = context,
             exportType = BackupExportTypes.FULL_SNAPSHOT,
@@ -29,6 +37,7 @@ object FileBackupOrchestrator {
             rangeEnd = Instant.now(),
             receipts = receipts,
             items = items,
+            necessityPolicy = policyDto,
         )
         BackupJsonCodec.toJson(file)
     }
@@ -36,7 +45,25 @@ object FileBackupOrchestrator {
     suspend fun mergeFromJson(context: Context, json: String): BackupMerge.MergeStats = withContext(Dispatchers.IO) {
         val file = BackupJsonCodec.fromJson(json)
         val dao = AppDatabase.get(context).receiptDao()
-        BackupMerge.mergeIntoDb(dao, file.data)
+        val stats = BackupMerge.mergeIntoDb(dao, file.data)
+        file.necessityPolicy?.let { dto ->
+            importNecessityPolicyIfNewer(context, file.exportedAt, dto)
+        }
+        stats
+    }
+
+    private fun importNecessityPolicyIfNewer(
+        context: Context,
+        exportExportedAt: String,
+        dto: NecessityPolicyBackupDto,
+    ) {
+        val store = NecessityPolicyStore(context)
+        val remoteTime = runCatching { Instant.parse(exportExportedAt) }.getOrNull() ?: return
+        val localCompiled = store.getCompiledPolicyOrNull()
+        val localTime = localCompiled?.compiledAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        if (localTime != null && !remoteTime.isAfter(localTime)) return
+        val purposeId = NecessityPurposeId.fromStored(dto.purposeId)
+        store.importFromBackup(purposeId, dto.corrections, dto.compiledPolicy)
     }
 
     fun countActiveInFile(file: KakeiboBackupFile): Int =

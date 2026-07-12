@@ -20,7 +20,8 @@
 | [`plans/onboarding.md`](plans/onboarding.md) | Phase 7.1 オンボーディング | ✅ 完了（§13 にコード精査メモ） |
 | [`plans/backup-manual-migration.md`](plans/backup-manual-migration.md) | Drive 廃止 → 手動 JSON バックアップ | ✅ 完了 |
 | [`plans/phase-5-2-analysis-status.md`](plans/phase-5-2-analysis-status.md) | 解析状態の可視化統一 | ✅ 完了 |
-| [`plans/phase-8-polish.md`](plans/phase-8-polish.md) | 品質ブラッシュアップ | ⬜ **次** |
+| [`plans/phase-8-polish.md`](plans/phase-8-polish.md) | 品質ブラッシュアップ | ✅ 完了 |
+| [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md) | 必須度ポリシー | ✅ |
 
 ## その他
 

@@ -53,6 +53,7 @@ import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.domain.CategoryCatalog
+import work.temp1209.kakeibo.data.domain.NecessityUtils
 import work.temp1209.kakeibo.data.domain.PaymentMethodCatalog
 import work.temp1209.kakeibo.ui.common.ExpenseLineEditorCard
 import work.temp1209.kakeibo.ui.common.ExpenseLineState
@@ -66,6 +67,8 @@ import java.time.ZonedDateTime
 private data class EditableLine(
     val itemId: String?,
     val confidence: Double,
+    val originalNecessityScore: Int,
+    val necessityScoreTouched: Boolean = false,
     val state: ExpenseLineState,
 )
 
@@ -87,13 +90,14 @@ private fun ReceiptItemEntity.toEditableLine(): EditableLine =
     EditableLine(
         itemId = itemId,
         confidence = confidence,
+        originalNecessityScore = necessityScore,
         state = ExpenseLineState(
             itemName = itemName,
             quantityText = quantity.toString(),
             lineTotalText = lineTotalYen.toString(),
             categoryMajor = categoryMajor,
             categoryMinor = categoryMinor,
-            necessityScore = necessityScore,
+            necessityScore = NecessityUtils.snapScore(necessityScore),
         ),
     )
 
@@ -151,6 +155,7 @@ fun ReceiptReviewScreen(
                             EditableLine(
                                 itemId = null,
                                 confidence = 1.0,
+                                originalNecessityScore = 50,
                                 state = ExpenseLineState(
                                     itemName = "",
                                     quantityText = "1",
@@ -405,6 +410,7 @@ fun ReceiptReviewScreen(
                             lines = lines + EditableLine(
                                 itemId = null,
                                 confidence = 1.0,
+                                originalNecessityScore = 50,
                                 state = ExpenseLineState(
                                     itemName = "",
                                     quantityText = "1",
@@ -423,13 +429,53 @@ fun ReceiptReviewScreen(
                 }
             }
 
+            if (lines.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(
+                        onClick = {
+                            lines = lines.map { line ->
+                                val newScore = NecessityUtils.snapScore(
+                                    (line.state.necessityScore + NecessityUtils.SCORE_STEP).coerceAtMost(100),
+                                )
+                                line.copy(
+                                    state = line.state.copy(necessityScore = newScore),
+                                    necessityScoreTouched = line.necessityScoreTouched || newScore != line.state.necessityScore,
+                                )
+                            }
+                        },
+                    ) { Text("必須度をまとめて上げる") }
+                    TextButton(
+                        onClick = {
+                            lines = lines.map { line ->
+                                val newScore = NecessityUtils.snapScore(
+                                    (line.state.necessityScore - NecessityUtils.SCORE_STEP).coerceAtLeast(0),
+                                )
+                                line.copy(
+                                    state = line.state.copy(necessityScore = newScore),
+                                    necessityScoreTouched = line.necessityScoreTouched || newScore != line.state.necessityScore,
+                                )
+                            }
+                        },
+                    ) { Text("必須度をまとめて下げる") }
+                }
+            }
+
             lines.forEachIndexed { idx, line ->
                 ExpenseLineEditorCard(
                     index = idx,
                     state = line.state,
                     onChange = { newState ->
+                        val scoreTouched = line.necessityScoreTouched ||
+                            newState.necessityScore != line.state.necessityScore
                         lines = lines.mapIndexed { i, cur ->
-                            if (i == idx) cur.copy(state = newState) else cur
+                            if (i == idx) {
+                                cur.copy(state = newState, necessityScoreTouched = scoreTouched)
+                            } else {
+                                cur
+                            }
                         }
                     },
                     onRemove = { pendingDeleteIndex = idx },
@@ -490,6 +536,20 @@ fun ReceiptReviewScreen(
                             ),
                         )
                         if (result.isSuccess) {
+                            val correctionEdits = lines
+                                .filter { it.necessityScoreTouched && it.originalNecessityScore != it.state.necessityScore }
+                                .map {
+                                    ReceiptRepository.NecessityCorrectionEdit(
+                                        itemName = it.state.itemName,
+                                        scoreBefore = it.originalNecessityScore,
+                                        scoreAfter = it.state.necessityScore,
+                                        receiptId = receiptId,
+                                        merchantName = merchant.trim().ifBlank { null },
+                                    )
+                                }
+                            if (correctionEdits.isNotEmpty()) {
+                                repo.recordNecessityCorrections(correctionEdits)
+                            }
                             onSaved()
                         } else {
                             errorText = result.exceptionOrNull()?.message ?: "保存に失敗しました"
