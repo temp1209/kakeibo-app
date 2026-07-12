@@ -8,4 +8,4 @@
 | [`backup-manual-migration.md`](backup-manual-migration.md) | 7.2' 手動 JSON バックアップ | ✅ 完了 |
 | [`phase-5-2-analysis-status.md`](phase-5-2-analysis-status.md) | 5.2 解析状態の可視化統一 | ✅ 完了 |
 | [`phase-8-polish.md`](phase-8-polish.md) | 8 品質ブラッシュアップ（JSON・オンボーディング） | ✅ 完了 |
-| [`phase-9-necessity-policy.md`](phase-9-necessity-policy.md) | 9 必須度ポリシー（ユーザー設定・コンパイル・再スコア） | ⬜ **次** |
+| [`phase-9-necessity-policy.md`](phase-9-necessity-policy.md) | 9 必須度ポリシー（ユーザー設定・コンパイル・再スコア） | ✅ 実装済み |

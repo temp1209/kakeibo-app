@@ -8,34 +8,27 @@
 
 ## いま何をしているか
 
-**Phase 9 必須度ポリシー** — 要件定義完了。**実装未着手**。
+**Phase 9 必須度ポリシー** — **実装完了**。残りは実機スモークと PR マージ。
 
 | 優先 | タスク | 状態 |
 |------|--------|------|
-| **1** | Phase **9** 必須度ポリシー実装 | 要件確定・実装待ち |
+| **1** | Phase **9** 実機確認 → PR | 実装済み・実機待ち |
 | — | Phase **5.1** プロンプトチューニング | 実利用並行（別 PR） |
+| — | `NecessityPresetTemplates` 境界ケース数値 | 実利用しながら調整 |
 
 詳細計画: [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md)  
 要件: [`REQUIREMENTS.md`](REQUIREMENTS.md) §16
 
 ---
 
-## Phase 9 要件サマリー（合意済み）
+## Phase 9 実装サマリー
 
-- **ハイブリッド**: プリセット土台はアプリ内テンプレ、**ユーザー固有部分のみ**コンパイル AI が生成
-- **コンパイル**: 設定 **保存時のみ**（訂正例追加だけでは自動実行しない）
-- **訂正例**: 案1 — 未コンパイルはバナー表示、解析は直前の有効方針を使用
-- **表示**: 1行要約 + ボタンで全文（`promptBlock`）
-- **再スコア**: 当月分・1ジョブ・明細 **50件/リクエスト**上限で API 分割
-- **バックアップ**: `purposeId`・訂正例・`compiledPolicy` を JSON に含める
-
-**三つの API ライン**: ①方針コンパイル ②レシート解析 ③当月再スコア
-
----
-
-## 完了済み（触らなくてよい）
-
-Phase 1〜8（コア、7.x、5.2、2.5、8.1〜8.3）— 詳細は [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+- **ハイブリッド**: プリセット土台は `NecessityPresetTemplates`、ユーザー固有はコンパイル AI
+- **三 API ライン**: ①コンパイル ②解析 ③当月再スコア
+- **プロンプト**: `data/prompt/` に集約（`ReceiptAnalysisPrompt` + `necessity/*`）
+- **プリセット別**: `scoreBands` / `boundaryCases` / マージ調整幅注釈
+- **訂正例**: 修正画面保存時に自動追加、コンパイル確認後クリア
+- **バックアップ**: `backupSchemaVersion` 1.2、`necessityPolicy` 同梱
 
 ---
 
@@ -44,8 +37,10 @@ Phase 1〜8（コア、7.x、5.2、2.5、8.1〜8.3）— 詳細は [`IMPLEMENTAT
 | 用途 | パス |
 |------|------|
 | **Phase 9 計画** | `docs/plans/phase-9-necessity-policy.md` |
-| 現行スコアルール | `data/analysis/AnalysisWorker.kt` |
-| 設定画面 | `ui/settings/SettingsScreen.kt` |
+| 解析プロンプト | `data/prompt/ReceiptAnalysisPrompt.kt` |
+| プリセット・境界ケース | `data/prompt/necessity/NecessityPresetTemplates.kt` |
+| コンパイル | `data/necessity/NecessityPolicyCompiler.kt` |
+| 設定 UI | `ui/settings/NecessityPolicySection.kt` |
 | バックアップ | `data/backup/BackupJsonModels.kt` |
 
 ---
@@ -53,5 +48,5 @@ Phase 1〜8（コア、7.x、5.2、2.5、8.1〜8.3）— 詳細は [`IMPLEMENTAT
 ## 推奨セッション開始手順
 
 1. `git checkout feat/phase9-necessity-policy`
-2. [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md) を読む
-3. 9.1（データモデル・プリセットテンプレ）から実装
+2. [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md) §8 テスト手順で実機確認
+3. 問題なければ PR 作成・マージ
