@@ -484,6 +484,7 @@ private fun AppNav(
             composable(Route.Settings.value) {
                 SettingsScreen(
                     contentPadding = PaddingValues(0.dp),
+                    repo = repo,
                     fileBackup = fileBackup,
                     backupPrefs = backupPrefs,
                 )
@@ -523,6 +524,9 @@ private fun AppNav(
                     },
                     onResendAnalysis = { id -> repo.resendAnalysis(id) },
                     onOpenSettings = { navController.navigateToTabRoot(Route.Settings.value) },
+                    onAddNecessityCorrection = { phrase, direction, source ->
+                        repo.addNecessityCorrection(phrase, direction, source)
+                    },
                 )
             }
         }

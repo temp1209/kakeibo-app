@@ -29,15 +29,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.gemini.GeminiClient
+import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.ui.backup.FileBackupUiState
+import work.temp1209.kakeibo.ui.settings.NecessityPolicySection
 import work.temp1209.kakeibo.ui.settings.GeminiApiKeyInputSection
 import work.temp1209.kakeibo.ui.common.TabScreenTitle
 
 @Composable
 fun SettingsScreen(
     contentPadding: PaddingValues,
+    repo: ReceiptRepository,
     fileBackup: FileBackupUiState,
     backupPrefs: FileBackupPrefs,
 ) {
@@ -114,6 +117,13 @@ fun SettingsScreen(
         ) {
             Text(if (testing) "疎通テスト中..." else "疎通テスト（テキスト）")
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        NecessityPolicySection(
+            repo = repo,
+            onShowMessage = { msg -> snackbarHostState.showSnackbar(message = msg, withDismissAction = true) },
+        )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 

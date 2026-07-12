@@ -50,6 +50,8 @@ import work.temp1209.kakeibo.data.db.ReceiptImageEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.necessity.NecessityCorrectionDirection
+import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import work.temp1209.kakeibo.data.domain.CategoryCatalog
 import work.temp1209.kakeibo.data.domain.PaymentMethodCatalog
 import work.temp1209.kakeibo.data.domain.ReceiptRequiredFields
@@ -74,6 +76,7 @@ fun ReceiptDetailScreen(
     onSwitchEvidenceFailedToManual: suspend (String) -> Result<Unit>,
     onResendAnalysis: suspend (String) -> ReceiptRepository.ResendAnalysisResult,
     onOpenSettings: () -> Unit,
+    onAddNecessityCorrection: suspend (String, NecessityCorrectionDirection, String) -> Unit = { _, _, _ -> },
 ) {
     var loading by remember(receiptId) { mutableStateOf(true) }
     var receipt by remember(receiptId) { mutableStateOf<ReceiptEntity?>(null) }
@@ -89,6 +92,7 @@ fun ReceiptDetailScreen(
     var resendInFlight by remember { mutableStateOf(false) }
     var resendCooldownUntil by remember { mutableStateOf(0L) }
     var deleteReason by remember { mutableStateOf("MISTAKE") }
+    var correctionMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun reload() {
@@ -318,6 +322,17 @@ fun ReceiptDetailScreen(
             )
         }
 
+        correctionMessage?.let { msg ->
+            AlertDialog(
+                onDismissRequest = { correctionMessage = null },
+                confirmButton = {
+                    TextButton(onClick = { correctionMessage = null }) { Text("OK") }
+                },
+                title = { Text("訂正例") },
+                text = { Text(msg) },
+            )
+        }
+
         if (showImageSheet && image != null) {
             AlertDialog(
                 onDismissRequest = { showImageSheet = false },
@@ -504,6 +519,7 @@ fun ReceiptDetailScreen(
                 }
             } else {
                 items(items, key = { it.itemId }) { line ->
+                    var lineMenuOpen by remember(line.itemId) { mutableStateOf(false) }
                     val lowConf = line.confidence < ReceiptRequiredFields.CONFIDENCE_THRESHOLD
                     val badCat = ReceiptRequiredFields.itemsWithInvalidCategory(listOf(line)).isNotEmpty()
                     Card(
@@ -519,7 +535,50 @@ fun ReceiptDetailScreen(
                         colors = CardDefaults.cardColors(),
                     ) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(line.itemName, fontWeight = FontWeight.Medium)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(line.itemName, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                                Box {
+                                    IconButton(onClick = { lineMenuOpen = true }) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "明細メニュー")
+                                    }
+                                    DropdownMenu(expanded = lineMenuOpen, onDismissRequest = { lineMenuOpen = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text("必須寄りに訂正例へ追加") },
+                                            onClick = {
+                                                lineMenuOpen = false
+                                                scope.launch {
+                                                    onAddNecessityCorrection(
+                                                        NecessityPolicyStore.normalizePhrase(line.itemName),
+                                                        NecessityCorrectionDirection.ESSENTIAL,
+                                                        line.itemName,
+                                                    )
+                                                    correctionMessage =
+                                                        "「${NecessityPolicyStore.normalizePhrase(line.itemName)}」を必須寄りの訂正例に追加しました。設定でコンパイルしてください。"
+                                                }
+                                            },
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("裁量寄りに訂正例へ追加") },
+                                            onClick = {
+                                                lineMenuOpen = false
+                                                scope.launch {
+                                                    onAddNecessityCorrection(
+                                                        NecessityPolicyStore.normalizePhrase(line.itemName),
+                                                        NecessityCorrectionDirection.DISCRETIONARY,
+                                                        line.itemName,
+                                                    )
+                                                    correctionMessage =
+                                                        "「${NecessityPolicyStore.normalizePhrase(line.itemName)}」を裁量寄りの訂正例に追加しました。設定でコンパイルしてください。"
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text(formatYen(line.lineTotalYen), style = MaterialTheme.typography.bodyMedium)
                                 Text("×${line.quantity}", style = MaterialTheme.typography.bodySmall)
