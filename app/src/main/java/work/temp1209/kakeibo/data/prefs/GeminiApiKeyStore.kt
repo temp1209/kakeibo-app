@@ -22,6 +22,7 @@ class GeminiApiKeyStore(context: Context) {
     fun hasKey(): Boolean = prefs.contains(KEY_API_KEY)
 
     fun saveKey(apiKey: String) {
+        if (apiKey.isBlank()) return
         prefs.edit().putString(KEY_API_KEY, apiKey).apply()
     }
 
