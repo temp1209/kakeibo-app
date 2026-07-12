@@ -20,15 +20,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.ui.settings.GeminiApiKeyInputSection
 
@@ -40,20 +46,77 @@ private enum class OnboardingStep {
     Done,
 }
 
+private fun parseOnboardingStep(name: String): OnboardingStep =
+    OnboardingStep.entries.find { it.name == name } ?: OnboardingStep.Welcome
+
+private fun onboardingStepCount(includeNotification: Boolean): Int =
+    if (includeNotification) 5 else 4
+
+private fun OnboardingStep.displayIndex(includeNotification: Boolean): Int = when (this) {
+    OnboardingStep.Welcome -> 1
+    OnboardingStep.ApiKey -> 2
+    OnboardingStep.Camera -> 3
+    OnboardingStep.Notification -> 4
+    OnboardingStep.Done -> if (includeNotification) 5 else 4
+}
+
+@Composable
+private fun OnboardingStepIndicator(current: OnboardingStep) {
+    val includeNotification = Build.VERSION.SDK_INT >= 33
+    Text(
+        text = "${current.displayIndex(includeNotification)} / ${onboardingStepCount(includeNotification)}",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun OnboardingStepTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+private fun OnboardingStepBody(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyLarge,
+    )
+}
+
+@Composable
+private fun OnboardingStepHint(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
 @Composable
 fun OnboardingWizard(
     onFinished: () -> Unit,
 ) {
     val context = LocalContext.current
     val apiKeyStore = remember { GeminiApiKeyStore(context) }
-    var step by remember { mutableStateOf(OnboardingStep.Welcome) }
+    var stepName by rememberSaveable { mutableStateOf(OnboardingStep.Welcome.name) }
+    val step = remember(stepName) { parseOnboardingStep(stepName) }
     var apiKeyInput by remember { mutableStateOf("") }
     var showApiKeyOverwriteConfirm by remember { mutableStateOf(false) }
-    var autoSkippedCamera by remember { mutableStateOf(false) }
-    var autoSkippedNotification by remember { mutableStateOf(false) }
+    var autoSkippedCamera by rememberSaveable { mutableStateOf(false) }
+    var autoSkippedNotification by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(stepName, step) {
+        if (step.name != stepName) {
+            stepName = step.name
+        }
+    }
 
     fun nextStep(from: OnboardingStep) {
-        step = when (from) {
+        stepName = when (from) {
             OnboardingStep.Welcome -> OnboardingStep.ApiKey
             OnboardingStep.ApiKey -> OnboardingStep.Camera
             OnboardingStep.Camera -> {
@@ -61,7 +124,7 @@ fun OnboardingWizard(
             }
             OnboardingStep.Notification -> OnboardingStep.Done
             OnboardingStep.Done -> OnboardingStep.Done
-        }
+        }.name
     }
 
     fun advanceFromApiKey() {
@@ -84,7 +147,7 @@ fun OnboardingWizard(
     }
 
     fun previousStep(from: OnboardingStep) {
-        step = when (from) {
+        stepName = when (from) {
             OnboardingStep.ApiKey -> OnboardingStep.Welcome
             OnboardingStep.Camera -> OnboardingStep.ApiKey
             OnboardingStep.Notification -> OnboardingStep.Camera
@@ -92,7 +155,7 @@ fun OnboardingWizard(
                 if (Build.VERSION.SDK_INT >= 33) OnboardingStep.Notification else OnboardingStep.Camera
             }
             OnboardingStep.Welcome -> OnboardingStep.Welcome
-        }
+        }.name
     }
 
     Scaffold { innerPadding ->
@@ -104,10 +167,11 @@ fun OnboardingWizard(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            OnboardingStepIndicator(step)
             when (step) {
                 OnboardingStep.Welcome -> {
-                    Text("ようこそ", style = MaterialTheme.typography.headlineMedium)
-                    Text(
+                    OnboardingStepTitle("ようこそ")
+                    OnboardingStepBody(
                         "レシートを撮るだけで家計簿がつきます。\n" +
                             "最初に、解析と撮影に必要な設定をします。",
                     )
@@ -122,8 +186,8 @@ fun OnboardingWizard(
                 }
 
                 OnboardingStep.ApiKey -> {
-                    Text("Gemini APIキー", style = MaterialTheme.typography.headlineSmall)
-                    Text(
+                    OnboardingStepTitle("Gemini APIキー")
+                    OnboardingStepBody(
                         "レシートの AI 解析に必要です。Google AI Studio 等で取得したキーを入力してください。",
                     )
                     GeminiApiKeyInputSection(
@@ -138,9 +202,8 @@ fun OnboardingWizard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
-                    Text(
+                    OnboardingStepHint(
                         "空のまま「次へ」でスキップできます（設定タブからいつでも入力可能）。",
-                        style = MaterialTheme.typography.bodySmall,
                     )
                     OnboardingNavRow(
                         showBack = true,
@@ -154,6 +217,7 @@ fun OnboardingWizard(
                     OnboardingPermissionStep(
                         title = "カメラの許可",
                         description = "レシートを撮影するためにカメラの使用を許可してください。",
+                        permissionNote = "カメラはレシートの撮影に使います。",
                         permission = Manifest.permission.CAMERA,
                         deniedHint = "拒否した場合は、端末の設定から後から許可できます。",
                         onBack = { previousStep(OnboardingStep.Camera) },
@@ -169,6 +233,7 @@ fun OnboardingWizard(
                     OnboardingPermissionStep(
                         title = "通知の許可",
                         description = "解析が終わったらお知らせします。通知を許可してください。",
+                        permissionNote = "通知は解析完了のお知らせに使います。",
                         permission = Manifest.permission.POST_NOTIFICATIONS,
                         deniedHint = "拒否してもアプリは使えますが、解析完了のお知らせは表示されません。",
                         onBack = { previousStep(OnboardingStep.Notification) },
@@ -181,8 +246,8 @@ fun OnboardingWizard(
                 }
 
                 OnboardingStep.Done -> {
-                    Text("準備完了", style = MaterialTheme.typography.headlineMedium)
-                    Text(
+                    OnboardingStepTitle("準備完了")
+                    OnboardingStepBody(
                         "レシートを撮影して送信してください。\n" +
                             "データのバックアップは、設定から JSON ファイルで保存できます。",
                     )
@@ -226,6 +291,7 @@ fun OnboardingWizard(
 private fun OnboardingPermissionStep(
     title: String,
     description: String,
+    permissionNote: String,
     permission: String,
     deniedHint: String,
     onBack: () -> Unit,
@@ -233,24 +299,36 @@ private fun OnboardingPermissionStep(
     shouldAutoAdvanceIfGranted: Boolean,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var granted by remember(permission) {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED,
         )
     }
 
+    fun refreshGranted() {
+        granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    }
+
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             granted = isGranted
-            if (isGranted) {
-                onNext()
-            }
         },
     )
 
     LaunchedEffect(permission) {
-        granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        refreshGranted()
+    }
+
+    DisposableEffect(lifecycleOwner, permission) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshGranted()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LaunchedEffect(granted, shouldAutoAdvanceIfGranted) {
@@ -259,12 +337,13 @@ private fun OnboardingPermissionStep(
         }
     }
 
-    Text(title, style = MaterialTheme.typography.headlineSmall)
-    Text(description)
+    OnboardingStepTitle(title)
+    OnboardingStepBody(description)
+    OnboardingStepHint(permissionNote)
     if (granted) {
         Text("許可済みです。", color = MaterialTheme.colorScheme.primary)
     } else {
-        Text(deniedHint, style = MaterialTheme.typography.bodySmall)
+        OnboardingStepHint(deniedHint)
     }
 
     Row(
