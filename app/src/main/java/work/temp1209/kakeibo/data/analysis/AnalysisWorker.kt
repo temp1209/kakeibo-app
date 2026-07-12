@@ -13,6 +13,7 @@ import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.notifications.NotificationHistory
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
@@ -62,10 +63,11 @@ class AnalysisWorker(
                     ?: error("failed to read image")
                 Log.d(TAG, "loaded image bytes=${jpegBytes.size}")
 
+                val prompt = buildPrompt(applicationContext)
                 val rawResponse = gemini.generateStrictJsonFromImage(
                     apiKey = apiKey,
                     jpegBytes = jpegBytes,
-                    prompt = PROMPT,
+                    prompt = prompt,
                     responseJsonSchema = ReceiptJsonSchema.schemaV1(),
                 )
 
@@ -374,6 +376,14 @@ class AnalysisWorker(
             receipt?.inputKind != "MANUAL_NO_RECEIPT"
 
         private const val TAG = "AnalysisWorker"
+
+        private fun buildPrompt(context: Context): String {
+            val userBlock = NecessityPolicyStore(context.applicationContext).getEffectivePromptBlock()
+            val marker = "（例: FOOD/外食でもスイーツ単品は低め）。\n\n### スコア帯の目安"
+            val injection = "（例: FOOD/外食でもスイーツ単品は低め）。\n\n### ユーザー向け必須度方針\n$userBlock\n\n### スコア帯の目安"
+            return PROMPT.replace(marker, injection)
+        }
+
         private const val PROMPT = """
 あなたは家計簿アプリのOCR/分類エンジンです。入力は **レシートの写真**（紙・電子レシートの表示を撮影したもの）に限らず、**レシートと同等の購入・会計情報が写っているスクリーンショット**（スマホ・PC の画面キャプチャ）も受け取ります。いずれも「購入を示す伝票・明細・合計・店名・日付」が読み取れる範囲で、同じルールで抽出し、必ず「指定スキーマの厳格JSONのみ」を返してください。
 

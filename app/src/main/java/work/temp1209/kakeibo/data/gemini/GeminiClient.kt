@@ -103,6 +103,48 @@ class GeminiClient(
         }
     }
 
+    fun generateStrictJsonFromText(
+        apiKey: String,
+        prompt: String,
+        responseJsonSchema: JSONObject,
+    ): String {
+        Log.d(TAG, "generateStrictJsonFromText start promptChars=${prompt.length}")
+        val body = JSONObject()
+            .put(
+                "contents",
+                JSONArray().put(
+                    JSONObject().put(
+                        "parts",
+                        JSONArray().put(JSONObject().put("text", prompt)),
+                    ),
+                ),
+            )
+            .put(
+                "generationConfig",
+                JSONObject()
+                    .put("responseMimeType", "application/json")
+                    .put("responseJsonSchema", responseJsonSchema),
+            )
+            .toString()
+
+        val request = Request.Builder()
+            .url("$BASE_URL/models/$MODEL:generateContent")
+            .header("x-goog-api-key", apiKey)
+            .post(body.toRequestBody(JSON.toMediaType()))
+            .build()
+
+        httpClient.newCall(request).execute().use { resp ->
+            val raw = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) {
+                val snippet = raw.take(800)
+                Log.w(TAG, "generateStrictJsonFromText failed http=${resp.code} bodySnippet=${snippet}")
+                throw IllegalStateException("HTTP ${resp.code}: $snippet")
+            }
+            Log.d(TAG, "generateStrictJsonFromText ok http=${resp.code} bodySize=${raw.length}")
+            return raw
+        }
+    }
+
     companion object {
         private const val TAG = "GeminiClient"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
