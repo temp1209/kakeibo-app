@@ -14,6 +14,7 @@ import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.db.AppDatabase
+import work.temp1209.kakeibo.data.notifications.NotificationHistory
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import java.time.Instant
 import java.util.UUID
@@ -144,23 +145,22 @@ class AnalysisWorker(
                 val updatedAt = Instant.now().toString()
                 val receiptStatus = if (flags2.needsReview) "NEEDS_REVIEW" else "DONE"
                 val errorMessage = if (flags2.needsReview) flags2.reasons.joinToString("; ") else null
-                dao.upsertReceipt(
-                    existing.copy(
-                        receiptDatetime = receiptDatetime,
-                        merchantName = merchantName,
-                        totalAmountYen = totalAmountYen,
-                        paymentMethod = paymentMethod,
-                        paymentServiceName = paymentServiceName,
-                        analysisStatus = receiptStatus,
-                        analysisStartedAt = now,
-                        analysisCompletedAt = updatedAt,
-                        analysisErrorMessage = errorMessage,
-                        needsReview = if (flags2.needsReview) 1 else 0,
-                        itemsSubtotalYen = subtotal,
-                        adjustmentYen = adjustment,
-                        updatedAt = updatedAt,
-                    )
+                val updatedReceipt = existing.copy(
+                    receiptDatetime = receiptDatetime,
+                    merchantName = merchantName,
+                    totalAmountYen = totalAmountYen,
+                    paymentMethod = paymentMethod,
+                    paymentServiceName = paymentServiceName,
+                    analysisStatus = receiptStatus,
+                    analysisStartedAt = now,
+                    analysisCompletedAt = updatedAt,
+                    analysisErrorMessage = errorMessage,
+                    needsReview = if (flags2.needsReview) 1 else 0,
+                    itemsSubtotalYen = subtotal,
+                    adjustmentYen = adjustment,
+                    updatedAt = updatedAt,
                 )
+                dao.upsertReceipt(updatedReceipt)
 
                 dao.upsertReceiptItems(items)
                 dao.insertGeminiResult(
@@ -181,30 +181,38 @@ class AnalysisWorker(
                     lastError = null,
                     attemptCount = attempt,
                 )
-                if (shouldSendAnalysisOsNotification(existing)) {
-                    if (flags2.needsReview) {
-                        AnalysisNotifications.notifyNeedsReview(applicationContext, entry.receiptId)
+                recordOutcomeAndMaybeNotify(
+                    receipt = updatedReceipt,
+                    eventType = if (flags2.needsReview) {
+                        NotificationHistory.TYPE_NEEDS_REVIEW
                     } else {
-                        AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
-                    }
-                }
+                        NotificationHistory.TYPE_DONE
+                    },
+                    notify = {
+                        if (flags2.needsReview) {
+                            AnalysisNotifications.notifyNeedsReview(applicationContext, entry.receiptId)
+                        } else {
+                            AnalysisNotifications.notifyDone(applicationContext, entry.receiptId)
+                        }
+                    },
+                    notifyGateReceipt = existing,
+                )
                 Log.d(TAG, "done receiptId=${entry.receiptId} status=$receiptStatus subtotal=$subtotal adjustment=$adjustment")
             } catch (e: Exception) {
                 val msg = userFacingErrorMessage(e)
                 Log.w(TAG, "failed receiptId=${entry.receiptId} attempt=$attempt error=$msg", e)
                 val finishedAt = Instant.now().toString()
                 val existing = dao.getReceiptOrNull(entry.receiptId)
-                if (existing != null) {
-                    dao.upsertReceipt(
-                        existing.copy(
-                            analysisStatus = "FAILED",
-                            analysisStartedAt = existing.analysisStartedAt ?: now,
-                            analysisCompletedAt = finishedAt,
-                            analysisErrorMessage = msg,
-                            needsReview = 1,
-                            updatedAt = finishedAt,
-                        ),
-                    )
+                val failedReceipt = existing?.copy(
+                    analysisStatus = "FAILED",
+                    analysisStartedAt = existing.analysisStartedAt ?: now,
+                    analysisCompletedAt = finishedAt,
+                    analysisErrorMessage = msg,
+                    needsReview = 1,
+                    updatedAt = finishedAt,
+                )
+                if (failedReceipt != null) {
+                    dao.upsertReceipt(failedReceipt)
                 }
                 dao.finishQueue(
                     queueId = entry.queueId,
@@ -213,8 +221,13 @@ class AnalysisWorker(
                     lastError = msg,
                     attemptCount = attempt,
                 )
-                if (shouldSendAnalysisOsNotification(existing)) {
-                    AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+                if (failedReceipt != null) {
+                    recordOutcomeAndMaybeNotify(
+                        receipt = failedReceipt,
+                        eventType = NotificationHistory.TYPE_FAILED,
+                        notify = { AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId) },
+                        notifyGateReceipt = existing,
+                    )
                 }
             }
         }
@@ -233,17 +246,16 @@ class AnalysisWorker(
         Log.w(TAG, "api key missing receiptId=${entry.receiptId}")
         dao.markQueueRunning(queueId = entry.queueId, startedAt = now)
         val existing = dao.getReceiptOrNull(entry.receiptId)
-        if (existing != null) {
-            dao.upsertReceipt(
-                existing.copy(
-                    analysisStatus = "FAILED",
-                    analysisStartedAt = existing.analysisStartedAt ?: now,
-                    analysisCompletedAt = now,
-                    analysisErrorMessage = message,
-                    needsReview = 1,
-                    updatedAt = now,
-                ),
-            )
+        val failedReceipt = existing?.copy(
+            analysisStatus = "FAILED",
+            analysisStartedAt = existing.analysisStartedAt ?: now,
+            analysisCompletedAt = now,
+            analysisErrorMessage = message,
+            needsReview = 1,
+            updatedAt = now,
+        )
+        if (failedReceipt != null) {
+            dao.upsertReceipt(failedReceipt)
         }
         dao.finishQueue(
             queueId = entry.queueId,
@@ -252,8 +264,13 @@ class AnalysisWorker(
             lastError = message,
             attemptCount = attempt,
         )
-        if (shouldSendAnalysisOsNotification(existing)) {
-            AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId)
+        if (failedReceipt != null) {
+            recordOutcomeAndMaybeNotify(
+                receipt = failedReceipt,
+                eventType = NotificationHistory.TYPE_FAILED,
+                notify = { AnalysisNotifications.notifyFailed(applicationContext, entry.receiptId) },
+                notifyGateReceipt = existing,
+            )
         }
     }
 
@@ -281,16 +298,15 @@ class AnalysisWorker(
                 createdAt = finishedAt,
             ),
         )
-        dao.upsertReceipt(
-            existing.copy(
-                analysisStatus = "FAILED",
-                analysisStartedAt = existing.analysisStartedAt ?: now,
-                analysisCompletedAt = finishedAt,
-                analysisErrorMessage = message,
-                needsReview = 1,
-                updatedAt = finishedAt,
-            ),
+        val failedReceipt = existing.copy(
+            analysisStatus = "FAILED",
+            analysisStartedAt = existing.analysisStartedAt ?: now,
+            analysisCompletedAt = finishedAt,
+            analysisErrorMessage = message,
+            needsReview = 1,
+            updatedAt = finishedAt,
         )
+        dao.upsertReceipt(failedReceipt)
         dao.finishQueue(
             queueId = entry.queueId,
             status = "FAILED",
@@ -298,10 +314,25 @@ class AnalysisWorker(
             lastError = message,
             attemptCount = attempt,
         )
-        if (shouldSendAnalysisOsNotification(existing)) {
-            AnalysisNotifications.notifyFailed(applicationContext, receiptId)
-        }
+        recordOutcomeAndMaybeNotify(
+            receipt = failedReceipt,
+            eventType = NotificationHistory.TYPE_FAILED,
+            notify = { AnalysisNotifications.notifyFailed(applicationContext, receiptId) },
+            notifyGateReceipt = existing,
+        )
         Log.w(TAG, "no receipt in image receiptId=$receiptId")
+    }
+
+    private suspend fun recordOutcomeAndMaybeNotify(
+        receipt: ReceiptEntity,
+        eventType: String,
+        notify: () -> Unit,
+        notifyGateReceipt: ReceiptEntity?,
+    ) {
+        NotificationHistory.record(applicationContext, receipt, eventType)
+        if (shouldSendAnalysisOsNotification(notifyGateReceipt)) {
+            notify()
+        }
     }
 
     private fun userFacingErrorMessage(e: Exception): String {

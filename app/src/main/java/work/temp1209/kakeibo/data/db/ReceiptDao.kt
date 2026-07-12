@@ -201,5 +201,32 @@ interface ReceiptDao {
             false
         }
     }
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertNotificationEvent(event: AnalysisNotificationEventEntity)
+
+    @Query("SELECT COUNT(*) FROM analysis_notification_events")
+    suspend fun countNotificationEvents(): Int
+
+    @Query(
+        """
+        SELECT eventId FROM analysis_notification_events
+        ORDER BY occurredAt ASC
+        LIMIT :count
+        """,
+    )
+    suspend fun listOldestNotificationEventIds(count: Int): List<String>
+
+    @Query("DELETE FROM analysis_notification_events WHERE eventId IN (:eventIds)")
+    suspend fun deleteNotificationEventsByIds(eventIds: List<String>)
+
+    @Query(
+        """
+        SELECT * FROM analysis_notification_events
+        ORDER BY occurredAt DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun listNotificationEvents(limit: Int): List<AnalysisNotificationEventEntity>
 }
 

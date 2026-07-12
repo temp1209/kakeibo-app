@@ -3,7 +3,7 @@
 > **ステータス**: 実装済み（実機確認済み・2026-07-11）  
 > **作成日**: 2026-07-11  
 > **実装完了**: 2026-07-11  
-> **親計画**: [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md) §7.1
+> **親計画**: [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) §7.1
 
 **ブラッシュアップ**: UI/UX の細かい改善（レイアウト、文言、アニメーション、ステップインジケータ等）は **意図的に後回し**。Phase 5.2 以降の優先タスクを先に進める。
 
@@ -256,7 +256,7 @@ if (hasExistingReceipts || apiKeyStore.hasKey()) {
 
 1. `REQUIREMENTS.md` にオンボーディング § 追加
 2. `KNOWN_ISSUES.md` §1 を解決済みに
-3. `IMPLEMENTATION_PLAN_REVISED_2026-07-11.md` の 7.1 チェック更新
+3. [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) の 7.1 チェック更新
 4. 実機: データ削除 → Wizard 一通り → 撮影 → 解析
 
 ---
@@ -300,37 +300,33 @@ if (hasExistingReceipts || apiKeyStore.hasKey()) {
 
 1. ~~Phase A〜D 実装~~ ✅（2026-07-11）
 2. ~~実機スモーク~~ ✅（2026-07-11）
-3. **ブラッシュアップ（後回し）** — 見た目・遷移アニメ・文言推敲・ステップインジケータ等。現状の最小ウィザードで運用開始し、Phase 5.2 等の優先タスク後に着手
-4. Phase 5.2（解析状態の可視化統一）
+3. **ブラッシュアップ** — Phase 8（[`phase-8-polish.md`](phase-8-polish.md)）: 8.1 JSON → 8.3 M1/M2 → 8.2 UI
+4. ~~Phase 5.2（解析状態の可視化統一）~~ ✅ 完了
 
 ---
 
-## 13. コード精査メモ（2026-07-11・後回し）
+## 13. コード精査メモ（2026-07-11・Phase 8 で一部解消）
 
-Phase 7.1 実装後の精査。**クリティカルな問題はなし**。以下は意図的に後回し（Phase 5.2 優先、ブラッシュアップ時に参照）。
+Phase 7.1 実装後の精査。**クリティカルな問題はなし**。M1/M2 は Phase 8.3 で解消（2026-07-12 実機確認済み）。
 
-### 中程度（次に手を入れるなら #1 から）
+### 中程度 — ✅ Phase 8.3 で解消
 
-| # | 項目 | 内容 | 対象ファイル |
-|---|------|------|-------------|
-| M1 | 権限状態が設定アプリ復帰後に古い | 拒否 → 端末設定で許可 → 戻ると UI が「未許可」のまま。「次へ」で進めるので致命ではない | `OnboardingWizard.kt`（`OnboardingPermissionStep`）、`CameraPermission.kt` |
-| M2 | 許可時に `onNext()` が二重呼び出しされうる | `onResult` と `LaunchedEffect(granted)` の両方。`nextStep(from)` 設計のため現状は実害ほぼなし | `OnboardingWizard.kt` |
-
-**M1 対策案**: `Lifecycle.Event.ON_RESUME` で `checkSelfPermission` を再実行。
-
-**M2 対策案**: 自動遷移は `LaunchedEffect` のみに寄せ、ダイアログ `onResult` は `granted` 更新だけにする。
+| # | 項目 | 状態 |
+|---|------|------|
+| M1 | 権限状態が設定アプリ復帰後に古い | ✅ `ON_RESUME` で再評価 |
+| M2 | 許可時に `onNext()` が二重呼び出しされうる | ✅ `LaunchedEffect` のみで自動遷移 |
 
 ### 低優先（ブラッシュアップ時）
 
-| # | 項目 | 内容 |
-|---|------|------|
-| L1 | 画面回転で Wizard ステップがリセット | `step` が `remember` のみ（`rememberSaveable` 未使用） |
-| L2 | 「準備完了」画面でアプリ終了すると未完了扱い | `onboarding_completed` は「はじめる」押下時のみ `true` |
-| L3 | アップデートユーザー全員に Wizard が1回出る | 計画どおり。うるさければ既存データ検出でスキップするマイグレーション |
-| L4 | 上書き確認ダイアログの重複 | `OnboardingWizard` と `GeminiApiKeyInputSection` に同一ロジック |
-| L5 | `showOnboarding` が起動時 prefs のみ参照 | セッション中の prefs 外部変更に非追従（通常は問題にならない） |
-| L6 | オンボーディング拒否後、カメラタブで即再リクエスト | `requireCameraPermission(autoRequest=true)`。説明なしで OS ダイアログ |
-| L7 | `GeminiApiKeyStore.saveKey("")` で `hasKey()==true` になりうる | 呼び出し側は `trim` 済み。Store 側の防御は任意 |
+| # | 項目 | 内容 | 状態 |
+|---|------|------|------|
+| L1 | 画面回転で Wizard ステップがリセット | `rememberSaveable` 化 | ✅ Phase 8 |
+| L2 | 「準備完了」画面でアプリ終了すると未完了扱い | `onboarding_completed` は「はじめる」押下時のみ `true` | 意図どおり |
+| L3 | アップデートユーザー全員に Wizard が1回出る | 計画どおり | 意図どおり |
+| L4 | 上書き確認ダイアログの重複 | `OnboardingWizard` と `GeminiApiKeyInputSection` | 未着手 |
+| L5 | `showOnboarding` が起動時 prefs のみ参照 | 通常は問題にならない | 意図どおり |
+| L6 | オンボーディング拒否後、カメラタブで即再リクエスト | `requireCameraPermission(autoRequest=true)` | 未着手 |
+| L7 | `GeminiApiKeyStore.saveKey("")` 防御 | Store 側ガード | ✅ Phase 8 |
 
 ### 確認済み（問題なし・意図どおり）
 
@@ -344,7 +340,7 @@ Phase 7.1 実装後の精査。**クリティカルな問題はなし**。以下
 
 ## 参照
 
-- [`IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](IMPLEMENTATION_PLAN_REVISED_2026-07-11.md)
+- [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md)
 - [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §1
 - [`REQUIREMENTS.md`](REQUIREMENTS.md) §3, §10, 実装ギャップ表
-- [`BACKUP_MANUAL_MIGRATION_PLAN.md`](BACKUP_MANUAL_MIGRATION_PLAN.md) — バックアップ案内の参照先
+- [`backup-manual-migration.md`](backup-manual-migration.md) — バックアップ案内の参照先

@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
+import work.temp1209.kakeibo.ui.common.ReceiptAnalysisStatusBadge
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -304,19 +305,7 @@ fun ReceiptsListScreen(
                                                 )
                                             }
                                         }
-                                        if (r.needsReview == 1) {
-                                            Surface(
-                                                shape = RoundedCornerShape(16.dp),
-                                                color = MaterialTheme.colorScheme.errorContainer,
-                                            ) {
-                                                Text(
-                                                    text = "要確認",
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                                )
-                                            }
-                                        }
+                                        ReceiptAnalysisStatusBadge(receipt = r, small = true)
                                     }
                                 }
                             }

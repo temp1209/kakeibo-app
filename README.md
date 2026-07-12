@@ -110,16 +110,14 @@ flowchart LR
 
 | ドキュメント | 内容 |
 |-------------|------|
+| [`docs/README.md`](docs/README.md) | **ドキュメント索引**（入口） |
 | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | 要件定義（UX・データモデル・カテゴリ体系） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md) | 実装計画（Phase 7 途中・手動バックアップ移行・最新） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md) | Phase 7 着手時の計画（アーカイブ） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-06-12.md) | Phase 6 定義（完了・アーカイブ） |
-| [`docs/IMPLEMENTATION_PLAN_REVISED_2026-04-26.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-04-26.md) | Phase 1〜5 の到達点・完了状況 |
+| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | 現行実装計画 |
 | [`docs/DEBUGGING_GUIDE.md`](docs/DEBUGGING_GUIDE.md) | 実機デバッグ・再現性確保の手順 |
 | [`docs/EXTERNAL_SETUP.md`](docs/EXTERNAL_SETUP.md) | Gemini API の外部サービス設定 |
-| [`docs/BACKUP_MANUAL_MIGRATION_PLAN.md`](docs/BACKUP_MANUAL_MIGRATION_PLAN.md) | 手動 JSON バックアップへの移行計画 |
-| [`docs/ONBOARDING_IMPLEMENTATION_PLAN.md`](docs/ONBOARDING_IMPLEMENTATION_PLAN.md) | Phase 7.1 オンボーディング実装計画 |
+| [`docs/plans/`](docs/plans/) | フェーズ別詳細計画（オンボーディング・バックアップ移行・**次: 5.2 解析状態**） |
 | [`docs/daily/`](docs/daily/) | 開発日報 |
+| [`docs/archive/`](docs/archive/) | 旧版実装計画 |
 
 ---
 
@@ -146,7 +144,7 @@ flowchart LR
 
 ## ロードマップ
 
-実装計画（[`docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md`](docs/IMPLEMENTATION_PLAN_REVISED_2026-07-11.md)）に基づく、直近の改善項目です。
+実装計画（[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)）に基づく、直近の改善項目です。
 
 ### Phase 6: 実利用フィードバック対応（完了）
 
@@ -160,9 +158,13 @@ flowchart LR
 
 ### Phase 5 残タスク
 
-- [ ] 解析状態の可視化統一（一覧 / 詳細 / 通知タブで同一ラベル）
-- [ ] 通知履歴の永続化（OS 通知見逃し対策）
-- [ ] Gemini JSON 閲覧体験の改善、プロンプト継続チューニング
+- [x] 解析状態の可視化統一（一覧 / 詳細 / 通知タブで同一ラベル）— [`docs/plans/phase-5-2-analysis-status.md`](docs/plans/phase-5-2-analysis-status.md)
+- [x] 通知履歴の永続化（OS 通知見逃し対策）
+### Phase 8 品質ブラッシュアップ（次）
+
+- [ ] Gemini JSON 閲覧改善 — [`docs/plans/phase-8-polish.md`](docs/plans/phase-8-polish.md) §8.1
+- [ ] オンボーディング UI・権限改善 — 同 §8.2–8.3
+- [ ] プロンプト継続チューニング（5.1・実利用並行）
 
 ### 将来検討
 

@@ -95,3 +95,19 @@ data class AnalysisQueueEntity(
     val finishedAt: String?,
 )
 
+@Entity(
+    tableName = "analysis_notification_events",
+    indices = [
+        Index(value = ["occurredAt"]),
+        Index(value = ["receiptId"]),
+    ],
+)
+data class AnalysisNotificationEventEntity(
+    @PrimaryKey val eventId: String,
+    val receiptId: String,
+    val eventType: String,
+    val occurredAt: String,
+    val merchantName: String?,
+    val totalAmountYen: Long?,
+)
+

@@ -34,16 +34,22 @@ import androidx.compose.ui.unit.dp
 import kotlin.OptIn
 import kotlinx.coroutines.launch
 import work.temp1209.kakeibo.ui.common.TabScreenTitle
+import work.temp1209.kakeibo.ui.common.NotificationEventBadge
+import work.temp1209.kakeibo.ui.common.AnalysisStatusBadge
+import work.temp1209.kakeibo.ui.common.analysisStatusDisplay
+import work.temp1209.kakeibo.ui.format.formatIsoInstant
+import work.temp1209.kakeibo.ui.format.formatYen
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.db.ReceiptEntity
+import work.temp1209.kakeibo.data.notifications.NotificationHistoryEntry
 
 private data class NotificationTabSnapshot(
     val queueCount: Int,
     val latestError: String?,
     val failed: List<ReceiptEntity>,
     val needsReview: List<ReceiptEntity>,
-    val recent: List<ReceiptEntity>,
+    val history: List<NotificationHistoryEntry>,
 )
 
 private suspend fun loadNotificationTabSnapshot(repo: ReceiptRepository): NotificationTabSnapshot {
@@ -52,11 +58,82 @@ private suspend fun loadNotificationTabSnapshot(repo: ReceiptRepository): Notifi
     val failed = repo.listFailedForResend(limit = 30)
     val needsReview = repo.listNeedsReview(limit = 30)
         .filter { it.analysisStatus != "FAILED" }
-    val excludeIds = (failed.map { it.receiptId } + needsReview.map { it.receiptId }).toSet()
-    val recent = repo.listRecentAnalyzed(limit = 60)
-        .filter { it.receiptId !in excludeIds }
-        .take(30)
-    return NotificationTabSnapshot(queueCount, latestError, failed, needsReview, recent)
+    val history = repo.listNotificationHistory()
+    return NotificationTabSnapshot(queueCount, latestError, failed, needsReview, history)
+}
+
+@Composable
+private fun NotificationHistoryCard(
+    entry: NotificationHistoryEntry,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val receipt = entry.receipt?.takeIf { it.deletedAt == null }
+    val merchant = receipt?.merchantName?.takeIf { it.isNotBlank() }
+        ?: entry.event.merchantName?.takeIf { it.isNotBlank() }
+        ?: "—"
+    val total = receipt?.totalAmountYen ?: entry.event.totalAmountYen
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        enabled = receipt != null,
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            NotificationEventBadge(eventType = entry.event.eventType, small = true)
+            Text("店名: $merchant")
+            Text("合計: ${formatYen(total)}")
+            Text(
+                formatIsoInstant(entry.event.occurredAt),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (receipt == null) {
+                Text(
+                    "レシートは削除済みです",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationReceiptCard(
+    receipt: ReceiptEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val display = receipt.analysisStatusDisplay()
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (display.showBadge) {
+                AnalysisStatusBadge(display = display, small = true)
+            }
+            Text("店名: ${receipt.merchantName?.ifBlank { "—" } ?: "—"}")
+            Text("合計: ${formatYen(receipt.totalAmountYen)}")
+            receipt.receiptDatetime?.let {
+                Text(
+                    formatIsoInstant(it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            receipt.analysisErrorMessage?.takeIf { it.isNotBlank() }?.let { msg ->
+                Text(
+                    msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -73,7 +150,7 @@ fun NotificationsScreen(
     var latestError by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
     var needsReview by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
-    var recent by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
+    var history by remember { mutableStateOf<List<NotificationHistoryEntry>>(emptyList()) }
     var isRefreshing by remember { mutableStateOf(false) }
     var resendMessage by remember { mutableStateOf<String?>(null) }
     var resendInFlightId by remember { mutableStateOf<String?>(null) }
@@ -105,7 +182,7 @@ fun NotificationsScreen(
         latestError = s.latestError
         failed = s.failed
         needsReview = s.needsReview
-        recent = s.recent
+        history = s.history
     }
 
     val pullRefreshState = rememberPullRefreshState(
@@ -174,8 +251,15 @@ fun NotificationsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("merchant: ${r.merchantName ?: "-"} / total: ${r.totalAmountYen ?: "-"}")
-                        Text("error: ${r.analysisErrorMessage ?: "-"}")
+                        AnalysisStatusBadge(
+                            display = r.analysisStatusDisplay(),
+                            small = true,
+                        )
+                        Text("店名: ${r.merchantName?.ifBlank { "—" } ?: "—"}")
+                        Text("合計: ${formatYen(r.totalAmountYen)}")
+                        r.analysisErrorMessage?.takeIf { it.isNotBlank() }?.let { msg ->
+                            Text(msg, color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = {
@@ -209,48 +293,39 @@ fun NotificationsScreen(
         }
 
         item {
-            Text("要確認（needsReview）: ${needsReview.size}件", style = MaterialTheme.typography.titleSmall)
+            Text("要確認: ${needsReview.size}件", style = MaterialTheme.typography.titleSmall)
         }
         if (needsReview.isEmpty()) {
             item { Text("該当するレシートはありません。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
             items(needsReview, key = { "needsReview:${it.receiptId}" }) { r ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                NotificationReceiptCard(
+                    receipt = r,
                     onClick = { onOpenReceiptReview(r.receiptId) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("status: ${r.analysisStatus} / error: ${r.analysisErrorMessage ?: "-"}")
-                        Text("merchant: ${r.merchantName ?: "-"} / total: ${r.totalAmountYen ?: "-"}")
-                        Text("receiptDatetime: ${r.receiptDatetime ?: "-"}")
-                    }
-                }
+                )
             }
         }
 
         item {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text("解析結果（最近）: ${recent.size}件", style = MaterialTheme.typography.titleSmall)
+            Text("通知履歴: ${history.size}件", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "OS 通知を見逃しても、直近の解析結果をここで確認できます。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        if (recent.isEmpty()) {
-            item { Text("まだ解析結果がありません。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (history.isEmpty()) {
+            item { Text("まだ通知履歴がありません。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
-            items(recent, key = { "recent:${it.receiptId}" }) { r ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    onClick = { onOpenReceipt(r.receiptId) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("status: ${r.analysisStatus}")
-                            if (r.needsReview == 1) Text("要確認", color = MaterialTheme.colorScheme.error)
-                        }
-                        Text("merchant: ${r.merchantName ?: "-"} / total: ${r.totalAmountYen ?: "-"}")
-                        Text("receiptDatetime: ${r.receiptDatetime ?: "-"}")
-                    }
-                }
+            items(history, key = { "history:${it.event.eventId}" }) { entry ->
+                val receipt = entry.receipt?.takeIf { it.deletedAt == null }
+                NotificationHistoryCard(
+                    entry = entry,
+                    onClick = {
+                        receipt?.let { onOpenReceipt(it.receiptId) }
+                    },
+                )
             }
         }
         }
