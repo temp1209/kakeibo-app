@@ -293,7 +293,7 @@
 
 実装: `OnboardingPrefs`, `OnboardingWizard`, `GeminiApiKeyInputSection`。詳細は [`plans/onboarding.md`](plans/onboarding.md)。
 
-**UI ブラッシュアップ**: 最小ウィザードで実機確認済み。見た目・権限フローの磨き込みは **Phase 8**（[`plans/phase-8-polish.md`](plans/phase-8-polish.md)）で実施予定。
+**UI ブラッシュアップ**: Phase 8（[`plans/phase-8-polish.md`](plans/phase-8-polish.md)）で完了（2026-07-12）。
 
 ### 15. 品質ブラッシュアップ（Phase 8・2026-07-11 計画）
 
@@ -685,18 +685,18 @@
 
 ---
 
-## 実装ギャップ（2026-07-11 更新）
+## 実装ギャップ（2026-07-12 更新）
 
 要件に記載があるが **未実装またはタスク未整理** の項目。詳細は [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) および実装計画 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)。
 
 | 項目 | 要件上の位置づけ | 現状 |
 |------|------------------|------|
-| 初回オンボーディング | §14、§10 APIキー「初回起動で入力」、§3 カメラ・通知 | ✅ 7.1 完了（UI ブラッシュアップは後回し） |
+| 初回オンボーディング | §14、§10 APIキー「初回起動で入力」、§3 カメラ・通知 | ✅ 7.1 + Phase 8 完了 |
 | 手動 JSON バックアップ | §12 保全 | ✅ 7.2' 実装済み |
 | 解析状態の可視化統一 | §3 通知タブ、一覧/詳細 UX | ✅ Phase 5.2 実機確認済み |
-| 通知履歴の永続化 | §3 通知タブ、Phase 2.5 | ✅ 2.5 実装済み（実機確認待ち） |
-| Gemini JSON 閲覧改善 | §15.1 | ⬜ Phase 8.1 |
-| オンボーディングブラッシュアップ | §14・§15.2、`onboarding.md` §12–13 | ⬜ Phase 8.2–8.3 |
+| 通知履歴の永続化 | §3 通知タブ、Phase 2.5 | ✅ 2.5 実機確認済み |
+| Gemini JSON 閲覧改善 | §15.1 | ✅ Phase 8.1 完了 |
+| オンボーディングブラッシュアップ | §14・§15.2、`onboarding.md` §12–13 | ✅ Phase 8.2–8.3 完了 |
 | APIキー未設定時の送信 | §10・撮影フロー（暗黙） | ✅ 7.3 送信時ダイアログ + Worker `FAILED` |
 
 
