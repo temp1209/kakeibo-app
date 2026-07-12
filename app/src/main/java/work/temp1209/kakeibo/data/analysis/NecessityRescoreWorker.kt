@@ -10,7 +10,7 @@ import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.gemini.GeminiResponseParser
 import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
-import work.temp1209.kakeibo.data.necessity.NecessityRescorePrompt
+import work.temp1209.kakeibo.data.prompt.necessity.NecessityRescorePrompt
 import work.temp1209.kakeibo.data.necessity.NecessityRescoreSchema
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
@@ -33,6 +33,7 @@ class NecessityRescoreWorker(
 
         val store = NecessityPolicyStore(applicationContext)
         val policyBlock = store.getEffectivePromptBlock()
+        val purposeId = store.getPurposeId()
         val yearMonth = YearMonth.now(ZoneId.systemDefault()).toString()
         val dao = AppDatabase.get(applicationContext).receiptDao()
         val allItems = dao.listNonAdjustmentItemsInMonth(yearMonth)
@@ -49,7 +50,7 @@ class NecessityRescoreWorker(
         var updatedCount = 0
         try {
             for ((index, chunk) in chunks.withIndex()) {
-                val prompt = NecessityRescorePrompt.build(chunk, policyBlock)
+                val prompt = NecessityRescorePrompt.build(chunk, policyBlock, purposeId)
                 val raw = gemini.generateStrictJsonFromText(
                     apiKey = apiKey,
                     prompt = prompt,

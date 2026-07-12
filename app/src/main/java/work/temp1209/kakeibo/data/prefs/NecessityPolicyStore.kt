@@ -5,9 +5,9 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import work.temp1209.kakeibo.data.necessity.CompiledNecessityPolicy
 import work.temp1209.kakeibo.data.necessity.NecessityCorrection
-import work.temp1209.kakeibo.data.necessity.NecessityPolicyMerger
-import work.temp1209.kakeibo.data.necessity.NecessityPresetTemplates
 import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
+import work.temp1209.kakeibo.data.prompt.necessity.NecessityPolicyPromptMerger
+import work.temp1209.kakeibo.data.prompt.necessity.NecessityPresetTemplates
 import java.time.Instant
 import java.util.UUID
 
@@ -64,7 +64,7 @@ class NecessityPolicyStore(context: Context) {
         if (compiled != null && compiled.promptBlock.isNotBlank()) {
             return compiled.promptBlock
         }
-        return NecessityPolicyMerger.fallbackPolicy(getPurposeId()).promptBlock
+        return NecessityPolicyPromptMerger.fallbackPolicy(getPurposeId()).promptBlock
     }
 
     fun getEffectiveSummary(): String {
