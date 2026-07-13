@@ -9,3 +9,4 @@
 | [`phase-5-2-analysis-status.md`](phase-5-2-analysis-status.md) | 5.2 解析状態の可視化統一 | ✅ 完了 |
 | [`phase-8-polish.md`](phase-8-polish.md) | 8 品質ブラッシュアップ（JSON・オンボーディング） | ✅ 完了 |
 | [`phase-9-necessity-policy.md`](phase-9-necessity-policy.md) | 9 必須度ポリシー（ユーザー設定・コンパイル・再スコア） | ✅ |
+| [`phase-9.5-brainstorm.md`](phase-9.5-brainstorm.md) | 9.5 コンセプト・機能ブレスト | 🔄 検討中 |
