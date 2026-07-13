@@ -1,51 +1,37 @@
 # エージェント引き継ぎメモ
 
-**最終更新**: 2026-07-12  
-**作業ブランチ**: `feat/phase9-necessity-policy`  
-**ベース**: `main`（Phase 8 PR #4 マージ済み）
+**最終更新**: 2026-07-14  
+**作業ブランチ**: `feat/phase9.5-brainstorm`（要件ドキュメント）  
+**ベース**: `main`（Phase 9 PR #5 マージ済み）
 
 ---
 
 ## いま何をしているか
 
-**Phase 9 必須度ポリシー** — **完了**（実機確認済み・`main` マージ済み）。
+**Phase 9.5** — ブレスト完了、**Phase 10 / 11 要件ドキュメント** 作成済み。実装は未着手。
 
-| 優先 | タスク | 状態 |
-|------|--------|------|
-| — | Phase **5.1** プロンプトチューニング | 実利用並行 |
-| — | `NecessityPresetTemplates` 境界ケース数値 | 実利用しながら調整 |
+| 優先 | Phase | 内容 | 状態 |
+|------|-------|------|------|
+| **1** | **10** | 複数 AI / API・フェイルオーバー（解析失敗の根本対策） | 要件定義済み・**次に実装** |
+| **2** | **11** | 予算・通知・分析グラフ・失敗 UI | 要件定義済み |
+| — | 5.1 | プロンプトチューニング | 実利用並行 |
 
-詳細計画: [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md)  
-要件: [`REQUIREMENTS.md`](REQUIREMENTS.md) §16
-
----
-
-## Phase 9 実装サマリー
-
-- **ハイブリッド**: プリセット土台は `NecessityPresetTemplates`、ユーザー固有はコンパイル AI
-- **三 API ライン**: ①コンパイル ②解析 ③当月再スコア
-- **プロンプト**: `data/prompt/` に集約（`ReceiptAnalysisPrompt` + `necessity/*`）
-- **プリセット別**: `scoreBands` / `boundaryCases` / マージ調整幅注釈
-- **訂正例**: 修正画面保存時に自動追加、コンパイル確認後クリア
-- **バックアップ**: `backupSchemaVersion` 1.2、`necessityPolicy` 同梱
+**推奨実装順**: Phase 10 → Phase 11
 
 ---
 
-## 重要ファイル
+## ドキュメント
 
-| 用途 | パス |
-|------|------|
-| **Phase 9 計画** | `docs/plans/phase-9-necessity-policy.md` |
-| 解析プロンプト | `data/prompt/ReceiptAnalysisPrompt.kt` |
-| プリセット・境界ケース | `data/prompt/necessity/NecessityPresetTemplates.kt` |
-| コンパイル | `data/necessity/NecessityPolicyCompiler.kt` |
-| 設定 UI | `ui/settings/NecessityPolicySection.kt` |
-| バックアップ | `data/backup/BackupJsonModels.kt` |
+| Phase | パス |
+|-------|------|
+| 9.5 ブレスト | [`plans/phase-9.5-brainstorm.md`](plans/phase-9.5-brainstorm.md) |
+| 10 複数 API | [`plans/phase-10-multi-ai-provider.md`](plans/phase-10-multi-ai-provider.md) |
+| 11 予算・通知 | [`plans/phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md) |
 
 ---
 
 ## 推奨セッション開始手順
 
-1. `git checkout main` && `git pull`
-2. 実利用しながら 5.1（`docs/fixtures/` + `ReceiptAnalysisPrompt`）
-3. 必要なら `NecessityPresetTemplates` の境界ケース数値を調整
+1. `git checkout main` && `git pull`（または `feat/phase9.5-brainstorm` でドキュメント PR）
+2. Phase 10 着手: `feat/phase10-multi-ai-provider` を `main` から作成
+3. `AiProvider` 抽象化 + `GeminiAiProvider` 移行から（phase-10 ドキュメント §5）
