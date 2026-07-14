@@ -1,8 +1,9 @@
 # Phase 10 複数 AI / API プロバイダ — 要件・実装計画
 
-> **ステータス**: 要件定義（未実装）  
+> **ステータス**: **実装完了**（`feat/phase10-multi-ai-provider`）  
 > **作成日**: 2026-07-14  
-> **作業ブランチ**: `feat/phase10-multi-ai-provider`（着手時に作成）  
+> **実装日**: 2026-07-14  
+> **作業ブランチ**: `feat/phase10-multi-ai-provider`  
 > **親**: [`phase-9.5-brainstorm.md`](phase-9.5-brainstorm.md)  
 > **次**: [`phase-11-budget-notifications.md`](phase-11-budget-notifications.md)
 
@@ -136,10 +137,19 @@
 
 **完了条件**
 
-- [ ] スロット 2 件以上登録し、1 件目が 429 のとき 2 件目で解析成功する
-- [ ] コンパイル・再スコアも同ルータ経由
-- [ ] 全スロット失敗時に分かりやすいエラー
-- [ ] 既存ユーザーの単一キーが移行される
+- [x] スロット 2 件以上登録し、1 件目が 429 のとき 2 件目で解析成功する（単体テストでフェイルオーバー検証）
+- [x] コンパイル・再スコアも同ルータ経由
+- [x] 全スロット失敗時に分かりやすいエラー（`AllAiProvidersFailedException`）
+- [x] 既存ユーザーの単一キーが移行される（`AiProviderStore` マイグレーション）
+
+### 実装メモ（2026-07-14）
+
+| 項目 | 内容 |
+|------|------|
+| 抽象化 | `data/ai/AiProvider`, `GeminiAiProvider`, `AiRequestRouter` |
+| 保存 | `AiProviderStore`（EncryptedSharedPreferences）。`GeminiApiKeyStore` は互換ファサード |
+| 初版プロバイダ | Gemini のみ（複数キー＝複数スロット） |
+| バックアップ | APIキーは従来どおり非同梱。設定画面に注記を追加 |
 
 ---
 

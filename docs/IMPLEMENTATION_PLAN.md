@@ -41,9 +41,9 @@ Phase 7 完了・M2 中核（5.2 解析状態・2.5 通知履歴）完了・**Ph
 
 | Phase | 内容 | 状態 |
 |-------|------|------|
-| **9.5** | ブレスト + 要件定義 | ✅ ドキュメント |
-| **10** | 複数 AI / API・フェイルオーバー | ⬜ **次に実装** |
-| **11** | 予算・通知・分析 UI・失敗 UX | ⬜ |
+| **9.5** | ブレスト + 要件定義 | ✅ ドキュメント（PR #6） |
+| **10** | 複数 AI / API・フェイルオーバー | ✅ 実装（実機確認待ち） |
+| **11** | 予算・通知・分析 UI・失敗 UX | ⬜ **次に実装** |
 
 詳細: [`plans/phase-9.5-brainstorm.md`](plans/phase-9.5-brainstorm.md) / [`phase-10-multi-ai-provider.md`](plans/phase-10-multi-ai-provider.md) / [`phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md)
 
