@@ -22,6 +22,9 @@
 | [`plans/phase-5-2-analysis-status.md`](plans/phase-5-2-analysis-status.md) | 解析状態の可視化統一 | ✅ 完了 |
 | [`plans/phase-8-polish.md`](plans/phase-8-polish.md) | 品質ブラッシュアップ | ✅ 完了 |
 | [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md) | 必須度ポリシー | ✅ |
+| [`plans/phase-9.5-brainstorm.md`](plans/phase-9.5-brainstorm.md) | ブレスト・要件分割 | ✅ |
+| [`plans/phase-10-multi-ai-provider.md`](plans/phase-10-multi-ai-provider.md) | 複数 AI / API | ⬜ 次 |
+| [`plans/phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md) | 予算・通知・分析 UI | ⬜ |
 
 ## その他
 
