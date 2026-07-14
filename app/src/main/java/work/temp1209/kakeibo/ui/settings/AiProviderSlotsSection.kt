@@ -86,9 +86,7 @@ fun AiProviderSlotsSection(
         slots.add(to, item)
         val order = slots.map { it.slotId }
         store.setOrderedSlotIds(order)
-        val labels = slots.joinToString(" → ") { it.label }
-        Log.d(TAG, "order saved: $labels ids=$order")
-        scope.launch { onShowMessage("優先順: $labels") }
+        Log.d(TAG, "order saved: ${slots.joinToString(" → ") { it.label }} ids=$order")
     }
 
     fun moveSlot(index: Int, delta: Int) {
