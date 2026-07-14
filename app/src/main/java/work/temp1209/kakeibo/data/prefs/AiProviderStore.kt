@@ -135,6 +135,15 @@ class AiProviderStore(context: Context) {
         persist(config.slots, order)
     }
 
+    fun setOrderedSlotIds(orderedSlotIds: List<String>) {
+        migrateLegacyIfNeeded()
+        val config = getConfig()
+        val known = config.slots.map { it.slotId }.toSet()
+        val filtered = orderedSlotIds.filter { it in known }.distinct()
+        val missing = config.slots.map { it.slotId }.filter { it !in filtered }
+        persist(config.slots, filtered + missing)
+    }
+
     /**
      * 後方互換: 単一キー保存。先頭スロットを更新、無ければ新規作成。
      */
