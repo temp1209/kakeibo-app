@@ -98,7 +98,7 @@ fun AiProviderSlotsSection(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("AI / API", style = MaterialTheme.typography.titleMedium)
         Text(
-            "上から順に使います。長押ししてドラッグ、または矢印で優先順位を変更できます。",
+            "上から順に使います。矢印またはハンドル長押しドラッグで優先順位を変更できます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

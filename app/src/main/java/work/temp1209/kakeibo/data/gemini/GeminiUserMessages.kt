@@ -12,12 +12,18 @@ object GeminiUserMessages {
     }
 
     fun userFacingError(throwable: Throwable, operation: Operation = Operation.RECEIPT_ANALYSIS): String {
-        if (throwable is AllAiProvidersFailedException) {
-            return throwable.message ?: AllAiProvidersFailedException.buildMessage(throwable.attempts)
-        }
-        val cause = throwable.cause
-        if (cause is AllAiProvidersFailedException) {
-            return cause.message ?: AllAiProvidersFailedException.buildMessage(cause.attempts)
+        val allFailed = throwable as? AllAiProvidersFailedException
+            ?: throwable.cause as? AllAiProvidersFailedException
+        if (allFailed != null) {
+            val root = allFailed.cause
+            return when {
+                root != null && isRateLimited(root) ->
+                    "すべての API で利用上限に達した可能性があります。${retryHint(operation)}"
+                root != null && root.message.orEmpty().contains("timeout", ignoreCase = true) ->
+                    "すべての API で通信がタイムアウトしました。${retryHint(operation)}"
+                else ->
+                    allFailed.message ?: AllAiProvidersFailedException.buildMessage(allFailed.attempts, root)
+            }
         }
         val msg = throwable.message.orEmpty()
         return when {
@@ -62,7 +68,11 @@ object GeminiUserMessages {
         }
     }
 
-    fun isRateLimited(throwable: Throwable): Boolean = isRateLimited(throwable.message.orEmpty())
+    fun isRateLimited(throwable: Throwable): Boolean {
+        if (isRateLimited(throwable.message.orEmpty())) return true
+        val cause = throwable.cause ?: return false
+        return isRateLimited(cause)
+    }
 
     fun isRateLimited(message: String): Boolean =
         message.contains("429") ||

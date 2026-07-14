@@ -359,7 +359,7 @@ class AnalysisWorker(
 
         private const val TAG = "AnalysisWorker"
 
-        private fun modelNameForProvider(providerId: String): String =
+        private fun modelNameForProvider(@Suppress("UNUSED_PARAMETER") providerId: String): String =
             GeminiAiProvider.MODEL_NAME
 
         private fun buildPrompt(context: Context): String =

@@ -145,9 +145,10 @@
 | 項目 | 内容 |
 |------|------|
 | 抽象化 | `data/ai/AiProvider`, `GeminiAiProvider`, `AiRequestRouter` |
-| 保存 | `AiProviderStore`（EncryptedSharedPreferences）。`GeminiApiKeyStore` は互換ファサード |
+| 保存 | `AiProviderStore`（EncryptedSharedPreferences、メタ+キー原子 commit）。`GeminiApiKeyStore` は互換ファサード |
 | 初版プロバイダ | Gemini のみ（複数キー＝複数スロット） |
 | バックアップ | APIキーは従来どおり非同梱。設定画面に注記を追加 |
+| 並び順 | `orderedSlots()` は order に欠ける ID も末尾補完。ルータはこれを使う |
 
 ---
 

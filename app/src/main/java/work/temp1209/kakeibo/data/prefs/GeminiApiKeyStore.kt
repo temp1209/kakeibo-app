@@ -4,7 +4,9 @@ import android.content.Context
 
 /**
  * 後方互換ファサード。実体は [AiProviderStore]（複数スロット）。
- * 既存の単一キー呼び出しは先頭スロットへマップする。
+ *
+ * - [saveKey]: オンボーディング用。複数スロット時は「メイン」ラベルを優先更新。
+ * - [deleteKey]: 全スロット削除（旧「APIキー削除」相当。設定 UI からは未使用）。
  */
 class GeminiApiKeyStore(context: Context) {
     private val providerStore = AiProviderStore(context)
