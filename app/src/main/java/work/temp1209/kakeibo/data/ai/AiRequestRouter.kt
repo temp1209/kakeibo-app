@@ -77,12 +77,9 @@ class AiRequestRouter(
                 )
             } catch (e: Exception) {
                 lastError = e
-                if (AiFailoverErrors.isFailoverable(e)) {
-                    Log.w(TAG, "failover from slot=${slot.label}: ${e.message}")
-                    continue
-                }
-                Log.w(TAG, "non-failoverable from slot=${slot.label}: ${e.message}")
-                throw e
+                // 正常な通信完了以外はすべて次スロットへ（HTTP/タイムアウト/キー無効など）
+                Log.w(TAG, "failover from slot=${slot.label}: ${e.message}")
+                continue
             }
         }
 

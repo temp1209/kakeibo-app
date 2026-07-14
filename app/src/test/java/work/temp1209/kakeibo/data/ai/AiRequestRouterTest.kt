@@ -1,57 +1,13 @@
 package work.temp1209.kakeibo.data.ai
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.json.JSONObject
 
-class AiFailoverErrorsTest {
-    @Test
-    fun rateLimit_isFailoverable() {
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 429: quota")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("RESOURCE_EXHAUSTED")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("Too Many Requests")))
-    }
-
-    @Test
-    fun serverError_andAuth_areFailoverable() {
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 500: boom")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 503")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 401: invalid")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 403: forbidden")))
-    }
-
-    @Test
-    fun timeout_isFailoverable() {
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("timeout")))
-        assertTrue(AiFailoverErrors.isFailoverable(java.net.SocketTimeoutException("read timed out")))
-    }
-
-    @Test
-    fun clientHttpErrors_areFailoverable_includingInvalidKey400() {
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 400: API_KEY_INVALID")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 400: API key not valid")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 401: unauthorized")))
-        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 403: forbidden")))
-    }
-
-    @Test
-    fun parseErrors_withoutHttp_areNotFailoverable() {
-        assertFalse(AiFailoverErrors.isFailoverable(IllegalStateException("unsupported schemaVersion=2.0")))
-        assertFalse(AiFailoverErrors.isFailoverable(IllegalArgumentException("parse failed")))
-    }
-
-    @Test
-    fun httpStatusCode_parses() {
-        assertEquals(429, AiFailoverErrors.httpStatusCode("HTTP 429: x"))
-        assertEquals(null, AiFailoverErrors.httpStatusCode("no code"))
-    }
-}
-
 class AiRequestRouterTest {
     @Test
-    fun failsOverToSecondSlot_on429() {
+    fun failsOverToSecondSlot_onAnyProviderException() {
         val failing = object : AiProvider {
             override val providerId = AiProviderId.GEMINI
             override fun testConnectivity(apiKey: String) = error("unused")
@@ -66,18 +22,16 @@ class AiRequestRouterTest {
                 prompt: String,
                 responseJsonSchema: JSONObject,
             ): String {
-                if (apiKey == "bad") throw IllegalStateException("HTTP 429: quota")
+                if (apiKey == "bad") throw IllegalStateException("HTTP 400: API_KEY_INVALID")
                 return """{"ok":true,"key":"$apiKey"}"""
             }
         }
-        val slots = listOf(
-            ProviderSlot("s1", AiProviderId.GEMINI, "main", true),
-            ProviderSlot("s2", AiProviderId.GEMINI, "backup", true),
-        )
-        val keys = mapOf("s1" to "bad", "s2" to "good")
         val result = routeText(
-            slots = slots,
-            keys = keys,
+            slots = listOf(
+                ProviderSlot("s1", AiProviderId.GEMINI, "main", true),
+                ProviderSlot("s2", AiProviderId.GEMINI, "backup", true),
+            ),
+            keys = mapOf("s1" to "bad", "s2" to "good"),
             providers = mapOf(AiProviderId.GEMINI to failing),
             prompt = "p",
             schema = JSONObject(),
@@ -87,7 +41,7 @@ class AiRequestRouterTest {
     }
 
     @Test
-    fun doesNotFailover_onNonRetryableError() {
+    fun failsOver_onArbitraryException() {
         val failing = object : AiProvider {
             override val providerId = AiProviderId.GEMINI
             override fun testConnectivity(apiKey: String) = error("unused")
@@ -101,20 +55,22 @@ class AiRequestRouterTest {
                 apiKey: String,
                 prompt: String,
                 responseJsonSchema: JSONObject,
-            ): String = throw IllegalStateException("unsupported schemaVersion=9")
+            ): String {
+                if (apiKey == "bad") throw IllegalStateException("something unexpected")
+                return """{"ok":true}"""
+            }
         }
-        try {
-            routeText(
-                slots = listOf(ProviderSlot("s1", AiProviderId.GEMINI, "main", true)),
-                keys = mapOf("s1" to "k"),
-                providers = mapOf(AiProviderId.GEMINI to failing),
-                prompt = "p",
-                schema = JSONObject(),
-            )
-            error("expected throw")
-        } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("schemaVersion"))
-        }
+        val result = routeText(
+            slots = listOf(
+                ProviderSlot("s1", AiProviderId.GEMINI, "a", true),
+                ProviderSlot("s2", AiProviderId.GEMINI, "b", true),
+            ),
+            keys = mapOf("s1" to "bad", "s2" to "good"),
+            providers = mapOf(AiProviderId.GEMINI to failing),
+            prompt = "p",
+            schema = JSONObject(),
+        )
+        assertEquals("s2", result.slotId)
     }
 
     @Test
@@ -169,8 +125,7 @@ class AiRequestRouterTest {
                 return AiRoutedResult(raw, slot.slotId, slot.providerId, slot.label)
             } catch (e: Exception) {
                 lastError = e
-                if (AiFailoverErrors.isFailoverable(e)) continue
-                throw e
+                continue
             }
         }
         throw AllAiProvidersFailedException(attempts.coerceAtLeast(1), lastError)
