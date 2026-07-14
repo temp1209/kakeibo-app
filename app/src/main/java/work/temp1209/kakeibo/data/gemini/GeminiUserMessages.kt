@@ -1,5 +1,7 @@
 package work.temp1209.kakeibo.data.gemini
 
+import work.temp1209.kakeibo.data.ai.AllAiProvidersFailedException
+
 object GeminiUserMessages {
 
     enum class Operation {
@@ -10,6 +12,13 @@ object GeminiUserMessages {
     }
 
     fun userFacingError(throwable: Throwable, operation: Operation = Operation.RECEIPT_ANALYSIS): String {
+        if (throwable is AllAiProvidersFailedException) {
+            return throwable.message ?: AllAiProvidersFailedException.buildMessage(throwable.attempts)
+        }
+        val cause = throwable.cause
+        if (cause is AllAiProvidersFailedException) {
+            return cause.message ?: AllAiProvidersFailedException.buildMessage(cause.attempts)
+        }
         val msg = throwable.message.orEmpty()
         return when {
             msg.contains("timeout", ignoreCase = true) ->

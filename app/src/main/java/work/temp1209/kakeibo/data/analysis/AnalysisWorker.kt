@@ -11,10 +11,11 @@ import work.temp1209.kakeibo.data.db.GeminiResultEntity
 import work.temp1209.kakeibo.data.db.ReceiptDao
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
-import work.temp1209.kakeibo.data.gemini.GeminiClient
+import work.temp1209.kakeibo.data.ai.AiRequestRouter
+import work.temp1209.kakeibo.data.ai.GeminiAiProvider
 import work.temp1209.kakeibo.data.gemini.GeminiResponseParser
 import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
-import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.AiProviderStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import work.temp1209.kakeibo.data.prompt.ReceiptAnalysisPrompt
 import work.temp1209.kakeibo.data.db.AppDatabase
@@ -29,13 +30,13 @@ class AnalysisWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val dao = AppDatabase.get(applicationContext).receiptDao()
-        val gemini = GeminiClient()
+        val providerStore = AiProviderStore(applicationContext)
+        val router = AiRequestRouter(providerStore)
 
         Log.d(TAG, "doWork start")
         while (true) {
             val entry = dao.getNextQueuedOrNull() ?: break
-            val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull()
-            if (apiKey == null) {
+            if (!providerStore.hasEnabledSlot()) {
                 handleMissingApiKeyFailure(dao = dao, entry = entry)
                 continue
             }
@@ -67,12 +68,13 @@ class AnalysisWorker(
                 Log.d(TAG, "loaded image bytes=${jpegBytes.size}")
 
                 val prompt = buildPrompt(applicationContext)
-                val rawResponse = gemini.generateStrictJsonFromImage(
-                    apiKey = apiKey,
+                val routed = router.generateStrictJsonFromImage(
                     jpegBytes = jpegBytes,
                     prompt = prompt,
                     responseJsonSchema = ReceiptJsonSchema.schemaV1(),
                 )
+                Log.d(TAG, "routed via slot=${routed.label} provider=${routed.providerId}")
+                val rawResponse = routed.rawResponse
 
                 val strictJson = extractStrictJson(rawResponse)
                 val parsed = try {
@@ -173,7 +175,7 @@ class AnalysisWorker(
                         resultId = UUID.randomUUID().toString(),
                         receiptId = entry.receiptId,
                         schemaVersion = parsed.schemaVersion,
-                        model = "gemini-2.5-flash",
+                        model = modelNameForProvider(routed.providerId),
                         rawJson = strictJson,
                         createdAt = updatedAt,
                     )
@@ -247,7 +249,7 @@ class AnalysisWorker(
     ) {
         val now = Instant.now().toString()
         val attempt = entry.attemptCount + 1
-        val message = GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE
+        val message = AiProviderStore.MISSING_KEY_USER_MESSAGE
         Log.w(TAG, "api key missing receiptId=${entry.receiptId}")
         dao.markQueueRunning(queueId = entry.queueId, startedAt = now)
         val existing = dao.getReceiptOrNull(entry.receiptId)
@@ -298,7 +300,7 @@ class AnalysisWorker(
                 resultId = UUID.randomUUID().toString(),
                 receiptId = receiptId,
                 schemaVersion = "1.0",
-                model = "gemini-2.5-flash",
+                model = GeminiAiProvider.MODEL_NAME,
                 rawJson = strictJson,
                 createdAt = finishedAt,
             ),
@@ -352,6 +354,9 @@ class AnalysisWorker(
             receipt?.inputKind != "MANUAL_NO_RECEIPT"
 
         private const val TAG = "AnalysisWorker"
+
+        private fun modelNameForProvider(providerId: String): String =
+            GeminiAiProvider.MODEL_NAME
 
         private fun buildPrompt(context: Context): String =
             ReceiptAnalysisPrompt.buildFromStore(NecessityPolicyStore(context.applicationContext))
