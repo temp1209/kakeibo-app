@@ -1,6 +1,7 @@
 package work.temp1209.kakeibo.ui.settings
 
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import android.util.Log
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -52,12 +55,12 @@ import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.prefs.AiProviderStore
 
 private val SlotRowHeight = 56.dp
+private const val TAG = "AiProviderSlots"
 
 @Composable
 fun AiProviderSlotsSection(
     store: AiProviderStore,
     onShowMessage: suspend (String) -> Unit,
-    onReorderDragChanged: (dragging: Boolean) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val router = remember { AiRequestRouter(store) }
@@ -77,32 +80,27 @@ fun AiProviderSlotsSection(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     val rowHeightPx = with(LocalDensity.current) { SlotRowHeight.toPx() }
 
-    fun finishDrag(commit: Boolean) {
-        val id = draggingId
-        if (commit && id != null) {
-            val from = slots.indexOfFirst { it.slotId == id }
-            if (from >= 0) {
-                val to = (from + (dragOffsetY / rowHeightPx).roundToInt())
-                    .coerceIn(0, slots.lastIndex)
-                if (to != from) {
-                    val item = slots.removeAt(from)
-                    slots.add(to, item)
-                    store.setOrderedSlotIds(slots.map { it.slotId })
-                }
-            }
-        }
-        draggingId = null
-        dragOffsetY = 0f
-        onReorderDragChanged(false)
-        if (!commit) {
-            revision++
-        }
+    fun persistOrder(from: Int, to: Int) {
+        if (from == to || from !in slots.indices || to !in slots.indices) return
+        val item = slots.removeAt(from)
+        slots.add(to, item)
+        val order = slots.map { it.slotId }
+        store.setOrderedSlotIds(order)
+        val labels = slots.joinToString(" → ") { it.label }
+        Log.d(TAG, "order saved: $labels ids=$order")
+        scope.launch { onShowMessage("優先順: $labels") }
+    }
+
+    fun moveSlot(index: Int, delta: Int) {
+        val to = index + delta
+        if (to !in slots.indices) return
+        persistOrder(index, to)
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("AI / API", style = MaterialTheme.typography.titleMedium)
         Text(
-            "上から順に使います。≡ を上下にドラッグして優先順位を変えられます。",
+            "上から順に使います。長押ししてドラッグ、または矢印で優先順位を変更できます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -118,19 +116,6 @@ fun AiProviderSlotsSection(
                 slots.forEachIndexed { index, slot ->
                     key(slot.slotId) {
                         val isDragging = draggingId == slot.slotId
-                        val displayIndex = if (draggingId == null) {
-                            index + 1
-                        } else {
-                            val from = slots.indexOfFirst { it.slotId == draggingId }
-                            val projectedTo = (from + (dragOffsetY / rowHeightPx).roundToInt())
-                                .coerceIn(0, slots.lastIndex)
-                            when {
-                                slot.slotId == draggingId -> projectedTo + 1
-                                from < projectedTo && index in (from + 1)..projectedTo -> index
-                                from > projectedTo && index in projectedTo until from -> index + 2
-                                else -> index + 1
-                            }
-                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -146,29 +131,43 @@ fun AiProviderSlotsSection(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.DragHandle,
-                                contentDescription = "並び替え",
+                                contentDescription = "長押しで並び替え",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
-                                    .padding(end = 4.dp)
-                                    .pointerInput(slot.slotId) {
-                                        detectVerticalDragGestures(
+                                    .padding(end = 2.dp)
+                                    .pointerInput(slot.slotId, rowHeightPx) {
+                                        var localOffset = 0f
+                                        detectDragGesturesAfterLongPress(
                                             onDragStart = {
+                                                localOffset = 0f
                                                 draggingId = slot.slotId
                                                 dragOffsetY = 0f
-                                                onReorderDragChanged(true)
                                             },
-                                            onVerticalDrag = { change, dragAmount ->
+                                            onDrag = { change, dragAmount ->
                                                 change.consume()
-                                                dragOffsetY += dragAmount
+                                                localOffset += dragAmount.y
+                                                dragOffsetY = localOffset
                                             },
-                                            onDragEnd = { finishDrag(commit = true) },
-                                            onDragCancel = { finishDrag(commit = false) },
+                                            onDragEnd = {
+                                                val from = slots.indexOfFirst { it.slotId == slot.slotId }
+                                                if (from >= 0 && slots.isNotEmpty()) {
+                                                    val to = (from + (localOffset / rowHeightPx).roundToInt())
+                                                        .coerceIn(0, slots.lastIndex)
+                                                    persistOrder(from, to)
+                                                }
+                                                draggingId = null
+                                                dragOffsetY = 0f
+                                            },
+                                            onDragCancel = {
+                                                draggingId = null
+                                                dragOffsetY = 0f
+                                            },
                                         )
                                     },
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "$displayIndex. ${slot.label}",
+                                    text = "${index + 1}. ${slot.label}",
                                     style = MaterialTheme.typography.bodyLarge,
                                 )
                                 Text(
@@ -176,6 +175,18 @@ fun AiProviderSlotsSection(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            }
+                            IconButton(
+                                onClick = { moveSlot(index, -1) },
+                                enabled = index > 0 && draggingId == null,
+                            ) {
+                                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "上へ")
+                            }
+                            IconButton(
+                                onClick = { moveSlot(index, 1) },
+                                enabled = index < slots.lastIndex && draggingId == null,
+                            ) {
+                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "下へ")
                             }
                             TextButton(
                                 onClick = {

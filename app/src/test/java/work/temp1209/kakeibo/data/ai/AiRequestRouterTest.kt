@@ -122,7 +122,7 @@ class AiRequestRouterTest {
             attempts++
             try {
                 val raw = provider.generateStrictJsonFromText(apiKey, prompt, schema)
-                return AiRoutedResult(raw, slot.slotId, slot.providerId, slot.label)
+                return AiRoutedResult(raw, slot.slotId, slot.providerId, slot.label, attempts, attempts)
             } catch (e: Exception) {
                 lastError = e
                 continue

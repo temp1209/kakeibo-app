@@ -50,14 +50,15 @@ class AiRequestRouter(
         if (slots.isEmpty()) {
             throw IllegalStateException(AiProviderStore.MISSING_KEY_USER_MESSAGE)
         }
-        Log.d(TAG, "route start slots=${slots.joinToString { it.label }}")
+        Log.d(TAG, "route start order=${slots.joinToString(" → ") { it.label }}")
 
         var lastError: Throwable? = null
         var attempts = 0
+        val eligibleCount = slots.count { !store.readApiKey(it.slotId).isNullOrBlank() && providers.containsKey(it.providerId) }
         for (slot in slots) {
             val apiKey = store.readApiKey(slot.slotId)
             if (apiKey.isNullOrBlank()) {
-                Log.w(TAG, "skip slot=${slot.slotId} (no key)")
+                Log.w(TAG, "skip slot=${slot.label} (no key)")
                 continue
             }
             val provider = providers[slot.providerId]
@@ -68,12 +69,17 @@ class AiRequestRouter(
             attempts++
             try {
                 val raw = call(provider, apiKey, slot)
-                Log.d(TAG, "success slot=${slot.label} provider=${slot.providerId} attempts=$attempts")
+                Log.d(
+                    TAG,
+                    "success slot=${slot.label} provider=${slot.providerId} attempt=$attempts/$eligibleCount",
+                )
                 return AiRoutedResult(
                     rawResponse = raw,
                     slotId = slot.slotId,
                     providerId = slot.providerId,
                     label = slot.label,
+                    attemptIndex = attempts,
+                    totalAttempts = eligibleCount.coerceAtLeast(attempts),
                 )
             } catch (e: Exception) {
                 lastError = e

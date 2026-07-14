@@ -141,7 +141,14 @@ class AiProviderStore(context: Context) {
         val known = config.slots.map { it.slotId }.toSet()
         val filtered = orderedSlotIds.filter { it in known }.distinct()
         val missing = config.slots.map { it.slotId }.filter { it !in filtered }
-        persist(config.slots, filtered + missing)
+        val nextOrder = filtered + missing
+        persist(config.slots, nextOrder)
+        android.util.Log.d(
+            "AiProviderStore",
+            "setOrderedSlotIds saved=${nextOrder.joinToString()} labels=${
+                nextOrder.mapNotNull { id -> config.slots.find { it.slotId == id }?.label }
+            }",
+        )
     }
 
     /**

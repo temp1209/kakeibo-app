@@ -73,7 +73,11 @@ class AnalysisWorker(
                     prompt = prompt,
                     responseJsonSchema = ReceiptJsonSchema.schemaV1(),
                 )
-                Log.d(TAG, "routed via slot=${routed.label} provider=${routed.providerId}")
+                Log.d(
+                    TAG,
+                    "routed via slot=${routed.label} provider=${routed.providerId} " +
+                        "attempt=${routed.attemptIndex}/${routed.totalAttempts}",
+                )
                 val rawResponse = routed.rawResponse
 
                 val strictJson = extractStrictJson(rawResponse)

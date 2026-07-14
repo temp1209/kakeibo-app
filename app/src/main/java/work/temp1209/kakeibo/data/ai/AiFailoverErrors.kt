@@ -23,4 +23,6 @@ data class AiRoutedResult(
     val slotId: String,
     val providerId: String,
     val label: String,
+    val attemptIndex: Int,
+    val totalAttempts: Int,
 )
