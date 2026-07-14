@@ -50,6 +50,7 @@ class AiRequestRouter(
         if (slots.isEmpty()) {
             throw IllegalStateException(AiProviderStore.MISSING_KEY_USER_MESSAGE)
         }
+        Log.d(TAG, "route start slots=${slots.joinToString { it.label }}")
 
         var lastError: Throwable? = null
         var attempts = 0
@@ -80,6 +81,7 @@ class AiRequestRouter(
                     Log.w(TAG, "failover from slot=${slot.label}: ${e.message}")
                     continue
                 }
+                Log.w(TAG, "non-failoverable from slot=${slot.label}: ${e.message}")
                 throw e
             }
         }

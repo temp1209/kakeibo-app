@@ -29,8 +29,15 @@ class AiFailoverErrorsTest {
     }
 
     @Test
-    fun clientErrors_andParse_areNotFailoverable() {
-        assertFalse(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 400: bad schema")))
+    fun clientHttpErrors_areFailoverable_includingInvalidKey400() {
+        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 400: API_KEY_INVALID")))
+        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 400: API key not valid")))
+        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 401: unauthorized")))
+        assertTrue(AiFailoverErrors.isFailoverable(IllegalStateException("HTTP 403: forbidden")))
+    }
+
+    @Test
+    fun parseErrors_withoutHttp_areNotFailoverable() {
         assertFalse(AiFailoverErrors.isFailoverable(IllegalStateException("unsupported schemaVersion=2.0")))
         assertFalse(AiFailoverErrors.isFailoverable(IllegalArgumentException("parse failed")))
     }
