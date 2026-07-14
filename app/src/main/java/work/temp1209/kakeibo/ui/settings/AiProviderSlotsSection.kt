@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -40,6 +41,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,6 +57,7 @@ private val SlotRowHeight = 56.dp
 fun AiProviderSlotsSection(
     store: AiProviderStore,
     onShowMessage: suspend (String) -> Unit,
+    onReorderDragChanged: (dragging: Boolean) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val router = remember { AiRequestRouter(store) }
@@ -74,10 +77,32 @@ fun AiProviderSlotsSection(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     val rowHeightPx = with(LocalDensity.current) { SlotRowHeight.toPx() }
 
+    fun finishDrag(commit: Boolean) {
+        val id = draggingId
+        if (commit && id != null) {
+            val from = slots.indexOfFirst { it.slotId == id }
+            if (from >= 0) {
+                val to = (from + (dragOffsetY / rowHeightPx).roundToInt())
+                    .coerceIn(0, slots.lastIndex)
+                if (to != from) {
+                    val item = slots.removeAt(from)
+                    slots.add(to, item)
+                    store.setOrderedSlotIds(slots.map { it.slotId })
+                }
+            }
+        }
+        draggingId = null
+        dragOffsetY = 0f
+        onReorderDragChanged(false)
+        if (!commit) {
+            revision++
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("AI / API", style = MaterialTheme.typography.titleMedium)
         Text(
-            "上から順に使います。ハンドルをドラッグして優先順位を変えられます。",
+            "上から順に使います。≡ を上下にドラッグして優先順位を変えられます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -91,100 +116,102 @@ fun AiProviderSlotsSection(
         } else {
             Column(modifier = Modifier.fillMaxWidth()) {
                 slots.forEachIndexed { index, slot ->
-                    val isDragging = draggingId == slot.slotId
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(SlotRowHeight)
-                            .zIndex(if (isDragging) 1f else 0f)
-                            .graphicsLayer {
-                                if (isDragging) translationY = dragOffsetY
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.DragHandle,
-                            contentDescription = "並び替え",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    key(slot.slotId) {
+                        val isDragging = draggingId == slot.slotId
+                        val displayIndex = if (draggingId == null) {
+                            index + 1
+                        } else {
+                            val from = slots.indexOfFirst { it.slotId == draggingId }
+                            val projectedTo = (from + (dragOffsetY / rowHeightPx).roundToInt())
+                                .coerceIn(0, slots.lastIndex)
+                            when {
+                                slot.slotId == draggingId -> projectedTo + 1
+                                from < projectedTo && index in (from + 1)..projectedTo -> index
+                                from > projectedTo && index in projectedTo until from -> index + 2
+                                else -> index + 1
+                            }
+                        }
+                        Row(
                             modifier = Modifier
-                                .padding(end = 4.dp)
-                                .pointerInput(slot.slotId, slots.size) {
-                                    detectVerticalDragGestures(
-                                        onDragStart = {
-                                            draggingId = slot.slotId
-                                            dragOffsetY = 0f
-                                        },
-                                        onVerticalDrag = { change, dragAmount ->
-                                            change.consume()
-                                            dragOffsetY += dragAmount
-                                            val from = slots.indexOfFirst { it.slotId == slot.slotId }
-                                            if (from < 0) return@detectVerticalDragGestures
-                                            val target = (from + (dragOffsetY / rowHeightPx).toInt())
-                                                .coerceIn(0, slots.lastIndex)
-                                            if (target != from) {
-                                                val item = slots.removeAt(from)
-                                                slots.add(target, item)
-                                                dragOffsetY -= (target - from) * rowHeightPx
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            draggingId = null
-                                            dragOffsetY = 0f
-                                            store.setOrderedSlotIds(slots.map { it.slotId })
-                                        },
-                                        onDragCancel = {
-                                            draggingId = null
-                                            dragOffsetY = 0f
-                                            revision++
-                                        },
-                                    )
+                                .fillMaxWidth()
+                                .height(SlotRowHeight)
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .graphicsLayer {
+                                    if (isDragging) {
+                                        translationY = dragOffsetY
+                                        alpha = 0.92f
+                                    }
                                 },
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "${index + 1}. ${slot.label}",
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                            Text(
-                                text = AiProviderId.displayName(slot.providerId),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        TextButton(
-                            onClick = {
-                                if (testingSlotId != null) return@TextButton
-                                testingSlotId = slot.slotId
-                                scope.launch {
-                                    val msg = runCatching {
-                                        withContext(Dispatchers.IO) { router.testSlot(slot.slotId) }
-                                    }.fold(
-                                        onSuccess = { "疎通OK（${slot.label}）" },
-                                        onFailure = {
-                                            GeminiUserMessages.userFacingError(
-                                                it,
-                                                GeminiUserMessages.Operation.CONNECTIVITY_TEST,
-                                            )
-                                        },
-                                    )
-                                    onShowMessage(msg)
-                                    testingSlotId = null
-                                }
-                            },
-                            enabled = testingSlotId == null && store.readApiKey(slot.slotId) != null,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(if (testingSlotId == slot.slotId) "…" else "疎通")
-                        }
-                        IconButton(onClick = { slotPendingDelete = slot }) {
                             Icon(
-                                Icons.Filled.Delete,
-                                contentDescription = "削除",
-                                tint = MaterialTheme.colorScheme.error,
+                                imageVector = Icons.Filled.DragHandle,
+                                contentDescription = "並び替え",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .padding(end = 4.dp)
+                                    .pointerInput(slot.slotId) {
+                                        detectVerticalDragGestures(
+                                            onDragStart = {
+                                                draggingId = slot.slotId
+                                                dragOffsetY = 0f
+                                                onReorderDragChanged(true)
+                                            },
+                                            onVerticalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragOffsetY += dragAmount
+                                            },
+                                            onDragEnd = { finishDrag(commit = true) },
+                                            onDragCancel = { finishDrag(commit = false) },
+                                        )
+                                    },
                             )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "$displayIndex. ${slot.label}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                Text(
+                                    text = AiProviderId.displayName(slot.providerId),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    if (testingSlotId != null) return@TextButton
+                                    testingSlotId = slot.slotId
+                                    scope.launch {
+                                        val msg = runCatching {
+                                            withContext(Dispatchers.IO) { router.testSlot(slot.slotId) }
+                                        }.fold(
+                                            onSuccess = { "疎通OK（${slot.label}）" },
+                                            onFailure = {
+                                                GeminiUserMessages.userFacingError(
+                                                    it,
+                                                    GeminiUserMessages.Operation.CONNECTIVITY_TEST,
+                                                )
+                                            },
+                                        )
+                                        onShowMessage(msg)
+                                        testingSlotId = null
+                                    }
+                                },
+                                enabled = testingSlotId == null && store.readApiKey(slot.slotId) != null,
+                            ) {
+                                Text(if (testingSlotId == slot.slotId) "…" else "疎通")
+                            }
+                            IconButton(onClick = { slotPendingDelete = slot }) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "削除",
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
-                    }
-                    if (index < slots.lastIndex) {
-                        HorizontalDivider()
+                        if (index < slots.lastIndex) {
+                            HorizontalDivider()
+                        }
                     }
                 }
             }

@@ -42,6 +42,7 @@ fun SettingsScreen(
 
     var lastExportAt by remember { mutableStateOf<String?>(null) }
     var lastImportAt by remember { mutableStateOf<String?>(null) }
+    var listScrollEnabled by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         lastExportAt = backupPrefs.lastExportAtOrNull()
@@ -60,7 +61,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .padding(contentPadding)
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState(), enabled = listScrollEnabled),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TabScreenTitle("設定")
@@ -71,6 +72,7 @@ fun SettingsScreen(
             onShowMessage = { msg ->
                 snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
             },
+            onReorderDragChanged = { dragging -> listScrollEnabled = !dragging },
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

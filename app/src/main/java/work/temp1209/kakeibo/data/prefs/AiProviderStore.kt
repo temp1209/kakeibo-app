@@ -208,7 +208,7 @@ class AiProviderStore(context: Context) {
         prefs.edit()
             .putString(KEY_SLOTS_JSON, arr.toString())
             .putString(KEY_ORDERED_SLOT_IDS, orderedSlotIds.joinToString(","))
-            .apply()
+            .commit()
     }
 
     private fun migrateLegacyIfNeeded() {
