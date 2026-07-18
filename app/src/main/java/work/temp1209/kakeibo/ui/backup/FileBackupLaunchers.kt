@@ -1,7 +1,6 @@
 package work.temp1209.kakeibo.ui.backup
 
 import android.net.Uri
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
@@ -41,9 +40,9 @@ private data class ImportConfirmState(
 fun rememberFileBackupUi(
     onMessage: (String) -> Unit,
 ): FileBackupUiState {
-    val activity = LocalContext.current as ComponentActivity
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val backupPrefs = remember { FileBackupPrefs(activity) }
+    val backupPrefs = remember { FileBackupPrefs(context) }
 
     var exporting by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
@@ -53,7 +52,7 @@ fun rememberFileBackupUi(
         importing = true
         try {
             val stats = withContext(Dispatchers.IO) {
-                FileBackupOrchestrator.mergeFromJson(activity, json)
+                FileBackupOrchestrator.mergeFromJson(context, json)
             }
             backupPrefs.setLastImportAt(Instant.now().toString())
             onMessage(BackupUserMessages.mergeResult(stats))
@@ -75,10 +74,10 @@ fun rememberFileBackupUi(
         scope.launch {
             try {
                 val json = withContext(Dispatchers.IO) {
-                    FileBackupOrchestrator.buildFullSnapshotJson(activity)
+                    FileBackupOrchestrator.buildFullSnapshotJson(context)
                 }
                 withContext(Dispatchers.IO) {
-                    activity.contentResolver.openOutputStream(uri)?.use { out ->
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
                         out.write(json.toByteArray(Charsets.UTF_8))
                     } ?: error("ファイルを開けませんでした")
                 }
@@ -102,14 +101,14 @@ fun rememberFileBackupUi(
         scope.launch {
             try {
                 val json = withContext(Dispatchers.IO) {
-                    activity.contentResolver.openInputStream(uri)?.use { input ->
+                    context.contentResolver.openInputStream(uri)?.use { input ->
                         input.readBytes().toString(Charsets.UTF_8)
                     } ?: error("ファイルを読み込めませんでした")
                 }
                 val file = FileBackupOrchestrator.parseFile(json)
                 val backupActive = FileBackupOrchestrator.countActiveInFile(file)
                 val localActive = withContext(Dispatchers.IO) {
-                    AppDatabase.get(activity).receiptDao().countActiveReceipts()
+                    AppDatabase.get(context).receiptDao().countActiveReceipts()
                 }
                 pendingImport = ImportConfirmState(
                     json = json,

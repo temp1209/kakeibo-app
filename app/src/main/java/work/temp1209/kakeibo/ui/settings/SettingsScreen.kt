@@ -1,6 +1,5 @@
 package work.temp1209.kakeibo.ui.settings
 
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,8 +34,8 @@ fun SettingsScreen(
     fileBackup: FileBackupUiState,
     backupPrefs: FileBackupPrefs,
 ) {
-    val activity = LocalContext.current as ComponentActivity
-    val providerStore = remember { AiProviderStore(activity) }
+    val context = LocalContext.current
+    val providerStore = remember { AiProviderStore(context) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
