@@ -97,6 +97,7 @@ object BackupExportBuilder {
         paymentMethod = paymentMethod,
         paymentServiceName = paymentServiceName,
         analysisStatus = analysisStatus,
+        analysisErrorMessage = analysisErrorMessage,
         needsReview = needsReview == 1,
         itemsSubtotalYen = itemsSubtotalYen,
         adjustmentYen = adjustmentYen,

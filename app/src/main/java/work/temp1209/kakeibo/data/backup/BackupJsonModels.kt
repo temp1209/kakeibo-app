@@ -37,6 +37,7 @@ data class ReceiptBackupDto(
     @SerializedName("paymentMethod") val paymentMethod: String?,
     @SerializedName("paymentServiceName") val paymentServiceName: String?,
     @SerializedName("analysisStatus") val analysisStatus: String,
+    @SerializedName("analysisErrorMessage") val analysisErrorMessage: String? = null,
     @SerializedName("needsReview") val needsReview: Boolean,
     @SerializedName("itemsSubtotalYen") val itemsSubtotalYen: Long,
     @SerializedName("adjustmentYen") val adjustmentYen: Long,
