@@ -12,6 +12,7 @@
 | [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) | エージェント / 開発再開時の引き継ぎ |
 | [`DEBUGGING_GUIDE.md`](DEBUGGING_GUIDE.md) | 実機デバッグ手順 |
 | [`EXTERNAL_SETUP.md`](EXTERNAL_SETUP.md) | Gemini API 等の外部設定 |
+| [`PLAY_STORE_PUBLICATION_DECISION.md`](PLAY_STORE_PUBLICATION_DECISION.md) | Play Store 公開に関する意思決定 |
 
 ## フェーズ別の詳細計画
 
@@ -46,6 +47,7 @@ docs/
 ├── AGENT_HANDOFF.md
 ├── DEBUGGING_GUIDE.md
 ├── EXTERNAL_SETUP.md
+├── PLAY_STORE_PUBLICATION_DECISION.md
 ├── plans/                 ← フェーズ別詳細計画（完了 + 次タスク）
 ├── daily/                 ← 日報
 ├── fixtures/              ← テスト素材
