@@ -4,8 +4,7 @@
 > **作成日**: 2026-07-14  
 > **作業ブランチ**: `feat/phase11-budget-notifications`（着手時に作成）  
 > **親**: [`phase-9.5-brainstorm.md`](phase-9.5-brainstorm.md)  
-> **前提**: [`phase-10-multi-ai-provider.md`](phase-10-multi-ai-provider.md) 推奨（API 基盤の後）  
-> **注**: Phase 10 は実装済み（PR 待ち）。本 Phase は Phase 10 マージ後に着手する。
+> **前提**: Phase 10（[`phase-10-multi-ai-provider.md`](phase-10-multi-ai-provider.md)）は PR #7 でマージ済み。
 
 ---
 
