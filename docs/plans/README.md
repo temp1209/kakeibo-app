@@ -11,4 +11,4 @@
 | [`phase-9-necessity-policy.md`](phase-9-necessity-policy.md) | 9 必須度ポリシー（ユーザー設定・コンパイル・再スコア） | ✅ |
 | [`phase-9.5-brainstorm.md`](phase-9.5-brainstorm.md) | 9.5 コンセプト・機能ブレスト | ✅ 完了（PR #6） |
 | [`phase-10-multi-ai-provider.md`](phase-10-multi-ai-provider.md) | 10 複数 AI / API（フェイルオーバー） | ✅ PR #7 マージ済み |
-| [`phase-11-budget-notifications.md`](phase-11-budget-notifications.md) | 11 予算・通知・分析 UI | 🔧 11.1〜11.6 完了 |
+| [`phase-11-budget-notifications.md`](phase-11-budget-notifications.md) | 11 予算・通知・分析 UI | ✅ 実装完了・実機確認待ち |

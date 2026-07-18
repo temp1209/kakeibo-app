@@ -5,6 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
+import work.temp1209.kakeibo.data.prefs.BudgetAggregateMode
+import work.temp1209.kakeibo.data.prefs.BudgetSettings
+import work.temp1209.kakeibo.data.prefs.BudgetStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import java.time.Instant
 import java.time.LocalDate
@@ -30,6 +33,12 @@ object FileBackupOrchestrator {
             corrections = policySnapshot.corrections,
             compiledPolicy = policySnapshot.compiledPolicy,
         )
+        val budgetSettings = BudgetStore(context).current()
+        val budgetDto = BudgetBackupDto(
+            enabled = budgetSettings.enabled,
+            monthlyBudgetYen = budgetSettings.monthlyBudgetYen,
+            aggregateMode = budgetSettings.aggregateMode.name,
+        )
         val file = BackupExportBuilder.buildFile(
             context = context,
             exportType = BackupExportTypes.FULL_SNAPSHOT,
@@ -38,6 +47,7 @@ object FileBackupOrchestrator {
             receipts = receipts,
             items = items,
             necessityPolicy = policyDto,
+            budget = budgetDto,
         )
         BackupJsonCodec.toJson(file)
     }
@@ -48,6 +58,15 @@ object FileBackupOrchestrator {
         val stats = BackupMerge.mergeIntoDb(dao, file.data)
         file.necessityPolicy?.let { dto ->
             importNecessityPolicyIfNewer(context, file.exportedAt, dto)
+        }
+        file.budget?.let { dto ->
+            BudgetStore(context).save(
+                BudgetSettings(
+                    enabled = dto.enabled,
+                    monthlyBudgetYen = dto.monthlyBudgetYen.coerceAtLeast(0),
+                    aggregateMode = BudgetAggregateMode.fromStored(dto.aggregateMode),
+                ),
+            )
         }
         stats
     }

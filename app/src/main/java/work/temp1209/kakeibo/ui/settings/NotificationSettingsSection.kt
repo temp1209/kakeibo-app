@@ -26,6 +26,8 @@ fun NotificationSettingsSection(
     var doneEnabled by remember { mutableStateOf(prefs.isAnalysisDoneEnabled()) }
     var needsReviewEnabled by remember { mutableStateOf(prefs.isNeedsReviewEnabled()) }
     var budgetProgressEnabled by remember { mutableStateOf(prefs.isBudgetProgressEnabled()) }
+    var budgetThreshold80Enabled by remember { mutableStateOf(prefs.isBudgetThreshold80Enabled()) }
+    var budgetThreshold100Enabled by remember { mutableStateOf(prefs.isBudgetThreshold100Enabled()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("通知")
@@ -66,12 +68,30 @@ fun NotificationSettingsSection(
         )
         if (showBudgetToggle) {
             NotificationToggleRow(
-                label = "月次予算の進捗",
+                label = "月次予算の定期確認",
                 checked = budgetProgressEnabled,
                 enabled = masterEnabled,
                 onCheckedChange = {
                     budgetProgressEnabled = it
                     prefs.setBudgetProgressEnabled(it)
+                },
+            )
+            NotificationToggleRow(
+                label = "予算の80%に達したとき",
+                checked = budgetThreshold80Enabled,
+                enabled = masterEnabled,
+                onCheckedChange = {
+                    budgetThreshold80Enabled = it
+                    prefs.setBudgetThreshold80Enabled(it)
+                },
+            )
+            NotificationToggleRow(
+                label = "予算の100%に達したとき",
+                checked = budgetThreshold100Enabled,
+                enabled = masterEnabled,
+                onCheckedChange = {
+                    budgetThreshold100Enabled = it
+                    prefs.setBudgetThreshold100Enabled(it)
                 },
             )
         }

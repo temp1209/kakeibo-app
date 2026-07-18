@@ -20,7 +20,7 @@ class BudgetNotificationWorker(
     override suspend fun doWork(): Result {
         val budget = BudgetStore(applicationContext).current()
         val notificationPrefs = NotificationPrefs(applicationContext)
-        if (!budget.isUsable || !notificationPrefs.isBudgetNotificationEnabled()) {
+        if (!budget.isUsable || !notificationPrefs.isAnyBudgetNotificationEnabled()) {
             return Result.success()
         }
 
@@ -37,7 +37,19 @@ class BudgetNotificationWorker(
             trackedYen = trackedYen,
             budgetYen = budget.monthlyBudgetYen,
             alreadySent = stateStore.sentReasons(yearMonth),
-        )
+        ).filterTo(linkedSetOf()) { reason ->
+            when (reason) {
+                BudgetNotificationPolicy.REASON_DAY_10,
+                BudgetNotificationPolicy.REASON_DAY_20,
+                BudgetNotificationPolicy.REASON_MONTH_END
+                -> notificationPrefs.isBudgetProgressEnabled()
+                BudgetNotificationPolicy.REASON_THRESHOLD_80 ->
+                    notificationPrefs.isBudgetThreshold80Enabled()
+                BudgetNotificationPolicy.REASON_THRESHOLD_100 ->
+                    notificationPrefs.isBudgetThreshold100Enabled()
+                else -> false
+            }
+        }
         if (dueReasons.isEmpty()) return Result.success()
 
         val percent = ((trackedYen.toDouble() / budget.monthlyBudgetYen) * 100)

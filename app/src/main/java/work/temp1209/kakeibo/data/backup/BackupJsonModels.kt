@@ -5,7 +5,7 @@ import work.temp1209.kakeibo.data.necessity.CompiledNecessityPolicy
 import work.temp1209.kakeibo.data.necessity.NecessityCorrection
 
 data class KakeiboBackupFile(
-    @SerializedName("backupSchemaVersion") val backupSchemaVersion: String = "1.2",
+    @SerializedName("backupSchemaVersion") val backupSchemaVersion: String = "1.3",
     @SerializedName("exportType") val exportType: String,
     @SerializedName("exportedAt") val exportedAt: String,
     @SerializedName("rangeStart") val rangeStart: String,
@@ -13,6 +13,7 @@ data class KakeiboBackupFile(
     @SerializedName("app") val app: BackupAppInfo,
     @SerializedName("data") val data: BackupDataPayload,
     @SerializedName("necessityPolicy") val necessityPolicy: NecessityPolicyBackupDto? = null,
+    @SerializedName("budget") val budget: BudgetBackupDto? = null,
 )
 
 data class BackupAppInfo(
@@ -70,4 +71,10 @@ data class NecessityPolicyBackupDto(
     @SerializedName("purposeId") val purposeId: String,
     @SerializedName("corrections") val corrections: List<NecessityCorrection>,
     @SerializedName("compiledPolicy") val compiledPolicy: CompiledNecessityPolicy?,
+)
+
+data class BudgetBackupDto(
+    @SerializedName("enabled") val enabled: Boolean,
+    @SerializedName("monthlyBudgetYen") val monthlyBudgetYen: Long,
+    @SerializedName("aggregateMode") val aggregateMode: String,
 )

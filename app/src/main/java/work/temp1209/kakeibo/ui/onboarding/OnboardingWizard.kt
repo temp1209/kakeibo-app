@@ -305,6 +305,8 @@ fun OnboardingWizard(
                             notificationPrefs.setAnalysisDoneEnabled(false)
                             notificationPrefs.setNeedsReviewEnabled(false)
                             notificationPrefs.setBudgetProgressEnabled(false)
+                            notificationPrefs.setBudgetThreshold80Enabled(false)
+                            notificationPrefs.setBudgetThreshold100Enabled(false)
                         },
                     )
                 }

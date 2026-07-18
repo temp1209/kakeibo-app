@@ -40,6 +40,7 @@ object BackupExportBuilder {
         receipts: List<ReceiptEntity>,
         items: List<ReceiptItemEntity>,
         necessityPolicy: NecessityPolicyBackupDto? = null,
+        budget: BudgetBackupDto? = null,
     ): KakeiboBackupFile {
         val receiptDtos = receipts.map { it.toDto() }
         val itemDtos = items.map { it.toDto() }
@@ -51,6 +52,7 @@ object BackupExportBuilder {
             app = appInfo(context),
             data = BackupDataPayload(receipts = receiptDtos, receiptItems = itemDtos),
             necessityPolicy = necessityPolicy,
+            budget = budget,
         )
     }
 

@@ -54,8 +54,21 @@ class NotificationPrefs(context: Context) {
         prefs.edit().putBoolean(KEY_BUDGET_PROGRESS_ENABLED, enabled).apply()
     }
 
-    fun isBudgetNotificationEnabled(): Boolean =
-        isMasterEnabled() && isBudgetProgressEnabled()
+    fun isBudgetThreshold80Enabled(): Boolean = prefs.getBoolean(KEY_BUDGET_THRESHOLD_80_ENABLED, false)
+
+    fun setBudgetThreshold80Enabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BUDGET_THRESHOLD_80_ENABLED, enabled).apply()
+    }
+
+    fun isBudgetThreshold100Enabled(): Boolean = prefs.getBoolean(KEY_BUDGET_THRESHOLD_100_ENABLED, false)
+
+    fun setBudgetThreshold100Enabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BUDGET_THRESHOLD_100_ENABLED, enabled).apply()
+    }
+
+    fun isAnyBudgetNotificationEnabled(): Boolean =
+        isMasterEnabled() &&
+            (isBudgetProgressEnabled() || isBudgetThreshold80Enabled() || isBudgetThreshold100Enabled())
 
     fun currentSettings(): NotificationSettings =
         NotificationSettings(
@@ -75,5 +88,7 @@ class NotificationPrefs(context: Context) {
         private const val KEY_ANALYSIS_DONE_ENABLED = "analysis_done_enabled"
         private const val KEY_NEEDS_REVIEW_ENABLED = "needs_review_enabled"
         private const val KEY_BUDGET_PROGRESS_ENABLED = "budget_progress_enabled"
+        private const val KEY_BUDGET_THRESHOLD_80_ENABLED = "budget_threshold_80_enabled"
+        private const val KEY_BUDGET_THRESHOLD_100_ENABLED = "budget_threshold_100_enabled"
     }
 }

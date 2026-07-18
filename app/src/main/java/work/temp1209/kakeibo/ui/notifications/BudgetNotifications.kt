@@ -53,6 +53,7 @@ object BudgetNotifications {
 
         val title = when {
             overBudgetYen > 0 -> "月次予算を超えました"
+            percent >= 100 -> "月次予算に達しました"
             monthEnd -> "今月の支出結果"
             else -> "月次予算の進捗"
         }
