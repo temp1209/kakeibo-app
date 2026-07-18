@@ -8,7 +8,7 @@ import work.temp1209.kakeibo.data.analysis.model.ReceiptHeader
 import work.temp1209.kakeibo.data.analysis.model.ReceiptItem
 import work.temp1209.kakeibo.data.analysis.model.ReviewFlags
 
-/** モデルが `warnings` に `[NO_RECEIPT]` を含めたときに送出し、解析を失敗扱いにする。 */
+/** モデルが `warnings` に `NO_RECEIPT` / `[NO_RECEIPT]` を含めたときに送出し、解析を失敗扱いにする。 */
 class NoReceiptInImageException(
     message: String = "画像にレシートが見当たりません。別の画像で試してください。",
 ) : Exception(message)
@@ -46,7 +46,7 @@ object GeminiStrictParser {
         }
 
         val warnings = root.optJSONArray("warnings")?.toStringList().orEmpty()
-        if (warnings.any { it.trim() == "[NO_RECEIPT]" }) {
+        if (containsNoReceiptWarning(warnings)) {
             throw NoReceiptInImageException()
         }
 
@@ -57,6 +57,17 @@ object GeminiStrictParser {
             warnings = warnings,
         )
     }
+
+    /** `[NO_RECEIPT]` 推奨だが、モデルが括弧なし `NO_RECEIPT` を返す場合もある。 */
+    fun containsNoReceiptWarning(warnings: List<String>): Boolean =
+        warnings.any { warning ->
+            val token = warning.trim()
+                .removePrefix("[")
+                .removeSuffix("]")
+                .trim()
+            token.equals("NO_RECEIPT", ignoreCase = true) ||
+                warning.contains("NO_RECEIPT", ignoreCase = true)
+        }
 
     fun reviewFlags(response: GeminiReceiptResponse, confidenceThreshold: Double = 0.7): ReviewFlags {
         val reasons = mutableListOf<String>()
