@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.prefs.AiProviderStore
 import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
+import work.temp1209.kakeibo.data.prefs.NotificationPrefs
 import work.temp1209.kakeibo.ui.backup.FileBackupUiState
 import work.temp1209.kakeibo.ui.common.TabScreenTitle
 
@@ -36,6 +37,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val providerStore = remember { AiProviderStore(context) }
+    val notificationPrefs = remember { NotificationPrefs(context) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -71,6 +73,10 @@ fun SettingsScreen(
                 snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
             },
         )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        NotificationSettingsSection(prefs = notificationPrefs)
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 

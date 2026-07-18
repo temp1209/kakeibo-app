@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.NotificationPrefs
 import work.temp1209.kakeibo.ui.settings.GeminiApiKeyInputSection
 
 private enum class OnboardingStep {
@@ -102,6 +103,7 @@ fun OnboardingWizard(
 ) {
     val context = LocalContext.current
     val apiKeyStore = remember { GeminiApiKeyStore(context) }
+    val notificationPrefs = remember { NotificationPrefs(context) }
     var stepName by rememberSaveable { mutableStateOf(OnboardingStep.Welcome.name) }
     val step = remember(stepName) { parseOnboardingStep(stepName) }
     var apiKeyInput by remember { mutableStateOf("") }
@@ -232,16 +234,22 @@ fun OnboardingWizard(
                 OnboardingStep.Notification -> {
                     OnboardingPermissionStep(
                         title = "通知の許可",
-                        description = "解析が終わったらお知らせします。通知を許可してください。",
-                        permissionNote = "通知は解析完了のお知らせに使います。",
+                        description = "解析に失敗したときや、予算のペースを確認したいときにお知らせできます。",
+                        permissionNote = "初期設定では解析失敗のお知らせだけが有効です。設定から変更できます。",
                         permission = Manifest.permission.POST_NOTIFICATIONS,
-                        deniedHint = "拒否してもアプリは使えますが、解析完了のお知らせは表示されません。",
+                        deniedHint = "拒否してもアプリは使えます。通知は端末の設定から後で許可できます。",
                         onBack = { previousStep(OnboardingStep.Notification) },
                         onNext = {
                             autoSkippedNotification = true
                             nextStep(OnboardingStep.Notification)
                         },
                         shouldAutoAdvanceIfGranted = !autoSkippedNotification,
+                        onPermissionDecision = { granted ->
+                            notificationPrefs.setMasterEnabled(granted)
+                            notificationPrefs.setAnalysisFailedEnabled(granted)
+                            notificationPrefs.setAnalysisDoneEnabled(false)
+                            notificationPrefs.setNeedsReviewEnabled(false)
+                        },
                     )
                 }
 
@@ -297,6 +305,7 @@ private fun OnboardingPermissionStep(
     onBack: () -> Unit,
     onNext: () -> Unit,
     shouldAutoAdvanceIfGranted: Boolean,
+    onPermissionDecision: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -333,6 +342,7 @@ private fun OnboardingPermissionStep(
 
     LaunchedEffect(granted, shouldAutoAdvanceIfGranted) {
         if (granted && shouldAutoAdvanceIfGranted) {
+            onPermissionDecision(true)
             onNext()
         }
     }
@@ -361,7 +371,10 @@ private fun OnboardingPermissionStep(
         showBack = true,
         onBack = onBack,
         primaryLabel = "次へ",
-        onPrimary = onNext,
+        onPrimary = {
+            onPermissionDecision(granted)
+            onNext()
+        },
         showPrimary = !granted || !shouldAutoAdvanceIfGranted,
     )
 }

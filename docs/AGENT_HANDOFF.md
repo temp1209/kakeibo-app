@@ -1,24 +1,24 @@
 # エージェント引き継ぎメモ
 
 **最終更新**: 2026-07-18
-**作業ブランチ**: `feat/phase10-multi-ai-provider`（origin 追従済み）  
-**ベース**: `main`（Phase 9.5 PR #6 マージ済み。Phase 10 は **未マージ**）
+**作業ブランチ**: `feat/phase11-budget-notifications`
+**ベース**: `main`（Phase 10 PR #7 マージ済み）
 
 ---
 
 ## いま何をしているか
 
-**Phase 10（複数 AI / API・フェイルオーバー）は実装・実機確認完了。** PR 作成 → `main` マージが残作業。
-その後 **Phase 11（予算・通知・分析 UI）** が次の実装。
+**Phase 10（複数 AI / API・フェイルオーバー）は PR #7 でマージ済み。**
+**Phase 11（予算・通知・分析 UI）** を実装中。11.1 の通知設定と送信ガードまで完了。
 
 | 優先 | Phase | 内容 | 状態 |
 |------|-------|------|------|
 | ✅ | 9.5 | ブレスト + 要件定義 | PR #6 マージ済 |
-| ✅ | **10** | 複数 API・フェイルオーバー | **実装・実機確認完了、PR 待ち** |
-| **1** | **11** | 予算・通知・分析グラフ・失敗 UI | 要件定義済み・次実装 |
+| ✅ | **10** | 複数 API・フェイルオーバー | PR #7 マージ済み |
+| **1** | **11** | 予算・通知・分析グラフ・失敗 UI | **11.1 完了、実装中** |
 | — | 5.1 | プロンプトチューニング | 実利用並行 |
 
-**推奨順**: Phase 10 を merge → Phase 11
+**次**: Phase 11.2 オンボーディング更新
 
 ---
 
@@ -60,19 +60,10 @@
 
 ## 推奨セッション開始手順
 
-### A. Phase 10 を閉じる
-
-1. `git checkout feat/phase10-multi-ai-provider` && `git pull`
-2. `gh pr create` → レビュー → merge
-3. 本ファイルと `IMPLEMENTATION_PLAN` を「Phase 10 ✅・マージ済み」に更新
-
-### B. Phase 11 を始める
-
-1. `git checkout main` && `git pull`
-2. `git checkout -b feat/phase11-budget-notifications`
-3. [`phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md) §6 順:
-   - 11.1 `NotificationPrefs` + 設定 UI + Worker ガード
-   - 11.2 オンボーディング（予算③・通知文言）
+1. `feat/phase11-budget-notifications` で作業を継続
+2. [`phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md) §6 順:
+   - 11.1 `NotificationPrefs` + 設定 UI + Worker ガード ✅
+   - 11.2 オンボーディング（予算③・通知文言）← 次
    - 11.3 `BudgetStore`
    - 11.4 分析タブ積み上げ
    - 11.5 予算通知 Worker
