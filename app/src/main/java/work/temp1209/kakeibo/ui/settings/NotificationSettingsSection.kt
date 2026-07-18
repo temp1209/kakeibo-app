@@ -19,11 +19,13 @@ import work.temp1209.kakeibo.data.prefs.NotificationPrefs
 @Composable
 fun NotificationSettingsSection(
     prefs: NotificationPrefs,
+    showBudgetToggle: Boolean,
 ) {
     var masterEnabled by remember { mutableStateOf(prefs.isMasterEnabled()) }
     var failedEnabled by remember { mutableStateOf(prefs.isAnalysisFailedEnabled()) }
     var doneEnabled by remember { mutableStateOf(prefs.isAnalysisDoneEnabled()) }
     var needsReviewEnabled by remember { mutableStateOf(prefs.isNeedsReviewEnabled()) }
+    var budgetProgressEnabled by remember { mutableStateOf(prefs.isBudgetProgressEnabled()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("通知")
@@ -62,6 +64,17 @@ fun NotificationSettingsSection(
                 prefs.setNeedsReviewEnabled(it)
             },
         )
+        if (showBudgetToggle) {
+            NotificationToggleRow(
+                label = "月次予算の進捗",
+                checked = budgetProgressEnabled,
+                enabled = masterEnabled,
+                onCheckedChange = {
+                    budgetProgressEnabled = it
+                    prefs.setBudgetProgressEnabled(it)
+                },
+            )
+        }
     }
 }
 

@@ -48,6 +48,15 @@ class NotificationPrefs(context: Context) {
         prefs.edit().putBoolean(KEY_NEEDS_REVIEW_ENABLED, enabled).apply()
     }
 
+    fun isBudgetProgressEnabled(): Boolean = prefs.getBoolean(KEY_BUDGET_PROGRESS_ENABLED, false)
+
+    fun setBudgetProgressEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BUDGET_PROGRESS_ENABLED, enabled).apply()
+    }
+
+    fun isBudgetNotificationEnabled(): Boolean =
+        isMasterEnabled() && isBudgetProgressEnabled()
+
     fun currentSettings(): NotificationSettings =
         NotificationSettings(
             masterEnabled = isMasterEnabled(),
@@ -65,5 +74,6 @@ class NotificationPrefs(context: Context) {
         private const val KEY_ANALYSIS_FAILED_ENABLED = "analysis_failed_enabled"
         private const val KEY_ANALYSIS_DONE_ENABLED = "analysis_done_enabled"
         private const val KEY_NEEDS_REVIEW_ENABLED = "needs_review_enabled"
+        private const val KEY_BUDGET_PROGRESS_ENABLED = "budget_progress_enabled"
     }
 }
