@@ -1,24 +1,33 @@
 # エージェント引き継ぎメモ
 
 **最終更新**: 2026-07-18
-**作業ブランチ**: `feat/phase10-multi-ai-provider`（origin 追従済み）  
-**ベース**: `main`（Phase 9.5 PR #6 マージ済み。Phase 10 は **未マージ**）
+**作業ブランチ**: `main`
+**ベース**: `main`（Phase 10 PR #7 / Phase 11 マージ済み）
 
 ---
 
 ## いま何をしているか
 
-**Phase 10（複数 AI / API・フェイルオーバー）は実装・実機確認完了。** PR 作成 → `main` マージが残作業。
-その後 **Phase 11（予算・通知・分析 UI）** が次の実装。
+**Phase 10・11 はいずれも `main` にマージ済み。**
 
 | 優先 | Phase | 内容 | 状態 |
 |------|-------|------|------|
 | ✅ | 9.5 | ブレスト + 要件定義 | PR #6 マージ済 |
-| ✅ | **10** | 複数 API・フェイルオーバー | **実装・実機確認完了、PR 待ち** |
-| **1** | **11** | 予算・通知・分析グラフ・失敗 UI | 要件定義済み・次実装 |
+| ✅ | **10** | 複数 API・フェイルオーバー | PR #7 マージ済み |
+| ✅ | **11** | 予算・通知・分析グラフ・失敗 UI | **完了（`main` マージ）** |
 | — | 5.1 | プロンプトチューニング | 実利用並行 |
+| — | — | UI/UX ブラッシュアップ | 後続（使わない設定の整理など） |
 
-**推奨順**: Phase 10 を merge → Phase 11
+**次**: 実機での残スモーク（任意）→ UI/UX ブラッシュアップ or 5.1
+
+### Phase 11 要約（as-built）
+
+- 通知マスター + 個別トグル（失敗のみデフォルト ON）
+- 月次予算（オンボーディング / 設定 / 分析積み上げ棒）
+- 予算進捗通知（10/20/月末・80%/100%、同月内キャッチアップ）
+- 解析失敗理由の一覧表示、バックアップ schema 1.3（`budget`）
+- `NO_RECEIPT` / `[NO_RECEIPT]` → 解析失敗
+- 設定の削減・簡略化は **後続 UI/UX でまとめて実施**（当面は現状維持）
 
 ---
 
@@ -60,23 +69,8 @@
 
 ## 推奨セッション開始手順
 
-### A. Phase 10 を閉じる
-
-1. `git checkout feat/phase10-multi-ai-provider` && `git pull`
-2. `gh pr create` → レビュー → merge
-3. 本ファイルと `IMPLEMENTATION_PLAN` を「Phase 10 ✅・マージ済み」に更新
-
-### B. Phase 11 を始める
-
-1. `git checkout main` && `git pull`
-2. `git checkout -b feat/phase11-budget-notifications`
-3. [`phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md) §6 順:
-   - 11.1 `NotificationPrefs` + 設定 UI + Worker ガード
-   - 11.2 オンボーディング（予算③・通知文言）
-   - 11.3 `BudgetStore`
-   - 11.4 分析タブ積み上げ
-   - 11.5 予算通知 Worker
-   - 11.6 解析失敗 UI
-   - 11.7 バックアップ schema
+1. `main` を最新化して作業ブランチを切る
+2. 後続候補: UI/UX ブラッシュアップ（設定項目の整理）、または 5.1 プロンプト
+3. Phase 11 詳細: [`phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md)
 
 CodeGraph: `codegraph_explore` を先に。`projectPath` にリポジトリルート。

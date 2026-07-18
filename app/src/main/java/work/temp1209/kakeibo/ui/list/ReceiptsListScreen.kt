@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import work.temp1209.kakeibo.ui.common.ReceiptAnalysisStatusBadge
+import work.temp1209.kakeibo.ui.common.analysisErrorSummary
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -274,6 +275,17 @@ fun ReceiptsListScreen(
                                             text = "合計 ${formatYen(r.totalAmountYen)}",
                                             style = MaterialTheme.typography.bodyMedium,
                                         )
+                                        if (r.analysisStatus == "FAILED") {
+                                            analysisErrorSummary(r.analysisErrorMessage)?.let { reason ->
+                                                Text(
+                                                    text = "理由: $reason",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.error,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
                                     }
                                     Column(
                                         horizontalAlignment = Alignment.End,

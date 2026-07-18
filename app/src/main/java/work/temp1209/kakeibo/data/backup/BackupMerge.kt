@@ -74,7 +74,7 @@ object BackupMerge {
         paymentServiceName = paymentServiceName,
         analysisStartedAt = null,
         analysisCompletedAt = null,
-        analysisErrorMessage = null,
+        analysisErrorMessage = analysisErrorMessage,
         needsReview = if (needsReview) 1 else 0,
         itemsSubtotalYen = itemsSubtotalYen,
         adjustmentYen = adjustmentYen,

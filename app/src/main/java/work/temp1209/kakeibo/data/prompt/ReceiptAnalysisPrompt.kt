@@ -45,7 +45,7 @@ object ReceiptAnalysisPrompt {
         |- レシートの断片のみで店名・合計・日付のいずれも確信できず、推測で埋めると誤記録になる
         |
         |このとき **通常の抽出結果を捏造してはならない**。代わりに次を **すべて**満たす厳格JSONのみを返すこと:
-        |1) `warnings` に **`[NO_RECEIPT]` と完全一致する文字列** を **1要素以上** 含める（他の警告文字列と併用可）
+        |1) `warnings` に **`[NO_RECEIPT]`**（推奨）または **`NO_RECEIPT`** を **1要素以上** 含める（他の警告文字列と併用可）
         |2) `items` は **空配列 `[]`**
         |3) `receipt.merchantName` は **`不明`**
         |4) `receipt.totalAmountYen` は **0**

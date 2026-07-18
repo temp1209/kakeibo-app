@@ -49,11 +49,13 @@ import work.temp1209.kakeibo.ui.preview.PreviewScreen
 import work.temp1209.kakeibo.ui.theme.KakeiboappTheme
 import androidx.compose.ui.unit.dp
 import work.temp1209.kakeibo.data.ReceiptRepository
+import work.temp1209.kakeibo.data.budget.BudgetNotificationScheduler
 import work.temp1209.kakeibo.ui.list.RECEIPTS_LIST_PERIOD_ALL
 import work.temp1209.kakeibo.ui.list.ReceiptsListScreen
 import work.temp1209.kakeibo.ui.settings.SettingsScreen
 import work.temp1209.kakeibo.ui.notifications.NotificationsScreen
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
+import work.temp1209.kakeibo.ui.notifications.BudgetNotifications
 import work.temp1209.kakeibo.ui.analysis.AnalysisScreen
 import work.temp1209.kakeibo.ui.review.ReceiptReviewScreen
 import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
@@ -100,6 +102,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         AnalysisNotifications.ensureChannel(this)
+        BudgetNotifications.ensureChannel(this)
+        BudgetNotificationScheduler.schedule(this)
         deepLinkReceiptId.value = intent.getStringExtra(AnalysisNotifications.EXTRA_RECEIPT_ID)
         // プロセス復帰後のランチャー起動: 子画面にいる場合はカメラへ戻す
         if (savedInstanceState != null && intent.isLauncherWithoutDeepLink() && deepLinkReceiptId.value == null) {

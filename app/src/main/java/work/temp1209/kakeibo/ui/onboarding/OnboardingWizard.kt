@@ -12,10 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,17 +32,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import work.temp1209.kakeibo.data.prefs.BudgetSettings
+import work.temp1209.kakeibo.data.prefs.BudgetStore
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.NotificationPrefs
 import work.temp1209.kakeibo.ui.settings.GeminiApiKeyInputSection
 
 private enum class OnboardingStep {
     Welcome,
     ApiKey,
+    Budget,
     Camera,
     Notification,
     Done,
@@ -50,14 +57,15 @@ private fun parseOnboardingStep(name: String): OnboardingStep =
     OnboardingStep.entries.find { it.name == name } ?: OnboardingStep.Welcome
 
 private fun onboardingStepCount(includeNotification: Boolean): Int =
-    if (includeNotification) 5 else 4
+    if (includeNotification) 6 else 5
 
 private fun OnboardingStep.displayIndex(includeNotification: Boolean): Int = when (this) {
     OnboardingStep.Welcome -> 1
     OnboardingStep.ApiKey -> 2
-    OnboardingStep.Camera -> 3
-    OnboardingStep.Notification -> 4
-    OnboardingStep.Done -> if (includeNotification) 5 else 4
+    OnboardingStep.Budget -> 3
+    OnboardingStep.Camera -> 4
+    OnboardingStep.Notification -> 5
+    OnboardingStep.Done -> if (includeNotification) 6 else 5
 }
 
 @Composable
@@ -102,9 +110,12 @@ fun OnboardingWizard(
 ) {
     val context = LocalContext.current
     val apiKeyStore = remember { GeminiApiKeyStore(context) }
+    val budgetStore = remember { BudgetStore(context) }
+    val notificationPrefs = remember { NotificationPrefs(context) }
     var stepName by rememberSaveable { mutableStateOf(OnboardingStep.Welcome.name) }
     val step = remember(stepName) { parseOnboardingStep(stepName) }
     var apiKeyInput by remember { mutableStateOf("") }
+    var budgetInput by rememberSaveable { mutableStateOf("") }
     var showApiKeyOverwriteConfirm by remember { mutableStateOf(false) }
     var autoSkippedCamera by rememberSaveable { mutableStateOf(false) }
     var autoSkippedNotification by rememberSaveable { mutableStateOf(false) }
@@ -118,7 +129,8 @@ fun OnboardingWizard(
     fun nextStep(from: OnboardingStep) {
         stepName = when (from) {
             OnboardingStep.Welcome -> OnboardingStep.ApiKey
-            OnboardingStep.ApiKey -> OnboardingStep.Camera
+            OnboardingStep.ApiKey -> OnboardingStep.Budget
+            OnboardingStep.Budget -> OnboardingStep.Camera
             OnboardingStep.Camera -> {
                 if (Build.VERSION.SDK_INT >= 33) OnboardingStep.Notification else OnboardingStep.Done
             }
@@ -149,7 +161,8 @@ fun OnboardingWizard(
     fun previousStep(from: OnboardingStep) {
         stepName = when (from) {
             OnboardingStep.ApiKey -> OnboardingStep.Welcome
-            OnboardingStep.Camera -> OnboardingStep.ApiKey
+            OnboardingStep.Budget -> OnboardingStep.ApiKey
+            OnboardingStep.Camera -> OnboardingStep.Budget
             OnboardingStep.Notification -> OnboardingStep.Camera
             OnboardingStep.Done -> {
                 if (Build.VERSION.SDK_INT >= 33) OnboardingStep.Notification else OnboardingStep.Camera
@@ -213,6 +226,50 @@ fun OnboardingWizard(
                     )
                 }
 
+                OnboardingStep.Budget -> {
+                    val budgetAmount = budgetInput.toLongOrNull()
+                    val validOrEmpty = budgetInput.isEmpty() || (budgetAmount != null && budgetAmount > 0)
+                    OnboardingStepTitle("月次予算")
+                    OnboardingStepBody(
+                        "毎月の予算を設定すると、分析画面で残りの目安を確認できます。",
+                    )
+                    OutlinedTextField(
+                        value = budgetInput,
+                        onValueChange = { value ->
+                            if (value.length <= 12 && value.all(Char::isDigit)) {
+                                budgetInput = value
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("月額予算（円）") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = budgetInput.isNotEmpty() && !validOrEmpty,
+                        supportingText = {
+                            if (budgetInput.isEmpty()) {
+                                Text("空のままスキップできます。設定から後で変更できます。")
+                            } else if (!validOrEmpty) {
+                                Text("1円以上の予算を入力してください")
+                            }
+                        },
+                    )
+                    OnboardingNavRow(
+                        showBack = true,
+                        onBack = { previousStep(OnboardingStep.Budget) },
+                        primaryLabel = if (budgetInput.isEmpty()) "スキップ" else "保存して次へ",
+                        primaryEnabled = validOrEmpty,
+                        onPrimary = {
+                            budgetStore.save(
+                                BudgetSettings(
+                                    enabled = budgetAmount != null && budgetAmount > 0,
+                                    monthlyBudgetYen = budgetAmount ?: 0,
+                                ),
+                            )
+                            nextStep(OnboardingStep.Budget)
+                        },
+                    )
+                }
+
                 OnboardingStep.Camera -> {
                     OnboardingPermissionStep(
                         title = "カメラの許可",
@@ -232,16 +289,25 @@ fun OnboardingWizard(
                 OnboardingStep.Notification -> {
                     OnboardingPermissionStep(
                         title = "通知の許可",
-                        description = "解析が終わったらお知らせします。通知を許可してください。",
-                        permissionNote = "通知は解析完了のお知らせに使います。",
+                        description = "解析に失敗したときや、予算のペースを確認したいときにお知らせできます。",
+                        permissionNote = "初期設定では解析失敗のお知らせだけが有効です。設定から変更できます。",
                         permission = Manifest.permission.POST_NOTIFICATIONS,
-                        deniedHint = "拒否してもアプリは使えますが、解析完了のお知らせは表示されません。",
+                        deniedHint = "拒否してもアプリは使えます。通知は端末の設定から後で許可できます。",
                         onBack = { previousStep(OnboardingStep.Notification) },
                         onNext = {
                             autoSkippedNotification = true
                             nextStep(OnboardingStep.Notification)
                         },
                         shouldAutoAdvanceIfGranted = !autoSkippedNotification,
+                        onPermissionDecision = { granted ->
+                            notificationPrefs.setMasterEnabled(granted)
+                            notificationPrefs.setAnalysisFailedEnabled(granted)
+                            notificationPrefs.setAnalysisDoneEnabled(false)
+                            notificationPrefs.setNeedsReviewEnabled(false)
+                            notificationPrefs.setBudgetProgressEnabled(false)
+                            notificationPrefs.setBudgetThreshold80Enabled(false)
+                            notificationPrefs.setBudgetThreshold100Enabled(false)
+                        },
                     )
                 }
 
@@ -297,6 +363,7 @@ private fun OnboardingPermissionStep(
     onBack: () -> Unit,
     onNext: () -> Unit,
     shouldAutoAdvanceIfGranted: Boolean,
+    onPermissionDecision: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -333,6 +400,7 @@ private fun OnboardingPermissionStep(
 
     LaunchedEffect(granted, shouldAutoAdvanceIfGranted) {
         if (granted && shouldAutoAdvanceIfGranted) {
+            onPermissionDecision(true)
             onNext()
         }
     }
@@ -361,7 +429,10 @@ private fun OnboardingPermissionStep(
         showBack = true,
         onBack = onBack,
         primaryLabel = "次へ",
-        onPrimary = onNext,
+        onPrimary = {
+            onPermissionDecision(granted)
+            onNext()
+        },
         showPrimary = !granted || !shouldAutoAdvanceIfGranted,
     )
 }
@@ -373,6 +444,7 @@ private fun OnboardingNavRow(
     primaryLabel: String,
     onPrimary: () -> Unit,
     showPrimary: Boolean = true,
+    primaryEnabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -386,7 +458,10 @@ private fun OnboardingNavRow(
             Text("")
         }
         if (showPrimary) {
-            Button(onClick = onPrimary) { Text(primaryLabel) }
+            Button(
+                onClick = onPrimary,
+                enabled = primaryEnabled,
+            ) { Text(primaryLabel) }
         }
     }
 }

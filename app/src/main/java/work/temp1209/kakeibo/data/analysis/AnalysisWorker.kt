@@ -17,6 +17,7 @@ import work.temp1209.kakeibo.data.gemini.GeminiResponseParser
 import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.prefs.AiProviderStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
+import work.temp1209.kakeibo.data.prefs.NotificationPrefs
 import work.temp1209.kakeibo.data.prompt.ReceiptAnalysisPrompt
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.notifications.NotificationHistory
@@ -28,6 +29,8 @@ class AnalysisWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
+    private val notificationPrefs = NotificationPrefs(appContext)
+
     override suspend fun doWork(): Result {
         val dao = AppDatabase.get(applicationContext).receiptDao()
         val providerStore = AiProviderStore(applicationContext)
@@ -341,7 +344,10 @@ class AnalysisWorker(
         notifyGateReceipt: ReceiptEntity?,
     ) {
         NotificationHistory.record(applicationContext, receipt, eventType)
-        if (shouldSendAnalysisOsNotification(notifyGateReceipt)) {
+        if (
+            shouldSendAnalysisOsNotification(notifyGateReceipt) &&
+            notificationPrefs.isAnalysisNotificationEnabled(eventType)
+        ) {
             notify()
         }
     }
