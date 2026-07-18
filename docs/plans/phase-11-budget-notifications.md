@@ -1,10 +1,11 @@
 # Phase 11 予算・通知・分析 UI — 要件・実装計画
 
-> **ステータス**: 実装完了（実機確認待ち）
+> **ステータス**: ✅ 完了（`main` マージ）
 > **作成日**: 2026-07-14  
-> **作業ブランチ**: `feat/phase11-budget-notifications`（着手時に作成）  
+> **作業ブランチ**: `feat/phase11-budget-notifications`  
 > **親**: [`phase-9.5-brainstorm.md`](phase-9.5-brainstorm.md)  
-> **前提**: Phase 10（[`phase-10-multi-ai-provider.md`](phase-10-multi-ai-provider.md)）は PR #7 でマージ済み。
+> **前提**: Phase 10（[`phase-10-multi-ai-provider.md`](phase-10-multi-ai-provider.md)）は PR #7 でマージ済み。  
+> **メモ**: 設定項目の整理（使わないトグルの削減など）は後続の UI/UX ブラッシュアップでまとめて行う。
 
 ---
 
