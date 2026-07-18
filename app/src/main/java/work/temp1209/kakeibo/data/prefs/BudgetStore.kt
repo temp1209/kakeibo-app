@@ -44,10 +44,6 @@ class BudgetStore(context: Context) {
             .apply()
     }
 
-    fun setEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
-    }
-
     companion object {
         private const val PREFS_NAME = "budget_prefs"
         private const val KEY_ENABLED = "budget_enabled"

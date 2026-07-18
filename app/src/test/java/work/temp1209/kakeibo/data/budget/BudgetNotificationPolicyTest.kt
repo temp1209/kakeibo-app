@@ -34,7 +34,14 @@ class BudgetNotificationPolicyTest {
             alreadySent = setOf(BudgetNotificationPolicy.REASON_THRESHOLD_80),
         )
 
-        assertEquals(setOf(BudgetNotificationPolicy.REASON_THRESHOLD_100), due)
+        assertEquals(
+            setOf(
+                BudgetNotificationPolicy.REASON_DAY_10,
+                BudgetNotificationPolicy.REASON_DAY_20,
+                BudgetNotificationPolicy.REASON_THRESHOLD_100,
+            ),
+            due,
+        )
     }
 
     @Test
@@ -46,7 +53,50 @@ class BudgetNotificationPolicyTest {
             alreadySent = emptySet(),
         )
 
-        assertEquals(setOf(BudgetNotificationPolicy.REASON_MONTH_END), due)
+        assertEquals(
+            setOf(
+                BudgetNotificationPolicy.REASON_DAY_10,
+                BudgetNotificationPolicy.REASON_DAY_20,
+                BudgetNotificationPolicy.REASON_MONTH_END,
+            ),
+            due,
+        )
+    }
+
+    @Test
+    fun lateRun_catchesUpMissedDay10() {
+        val due = BudgetNotificationPolicy.dueReasons(
+            date = LocalDate.of(2026, 7, 11),
+            trackedYen = 10_000,
+            budgetYen = 100_000,
+            alreadySent = emptySet(),
+        )
+
+        assertEquals(setOf(BudgetNotificationPolicy.REASON_DAY_10), due)
+    }
+
+    @Test
+    fun lateRun_catchesUpMissedDay20_afterDay10Sent() {
+        val due = BudgetNotificationPolicy.dueReasons(
+            date = LocalDate.of(2026, 7, 22),
+            trackedYen = 10_000,
+            budgetYen = 100_000,
+            alreadySent = setOf(BudgetNotificationPolicy.REASON_DAY_10),
+        )
+
+        assertEquals(setOf(BudgetNotificationPolicy.REASON_DAY_20), due)
+    }
+
+    @Test
+    fun beforeDay10_hasNoCalendarReasons() {
+        val due = BudgetNotificationPolicy.dueReasons(
+            date = LocalDate.of(2026, 7, 9),
+            trackedYen = 10_000,
+            budgetYen = 100_000,
+            alreadySent = emptySet(),
+        )
+
+        assertTrue(due.isEmpty())
     }
 
     @Test
@@ -55,7 +105,10 @@ class BudgetNotificationPolicyTest {
             date = LocalDate.of(2026, 7, 20),
             trackedYen = 20_000,
             budgetYen = 100_000,
-            alreadySent = setOf(BudgetNotificationPolicy.REASON_DAY_20),
+            alreadySent = setOf(
+                BudgetNotificationPolicy.REASON_DAY_10,
+                BudgetNotificationPolicy.REASON_DAY_20,
+            ),
         )
 
         assertTrue(due.isEmpty())

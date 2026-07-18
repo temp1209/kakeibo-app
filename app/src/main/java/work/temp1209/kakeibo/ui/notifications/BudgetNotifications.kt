@@ -33,6 +33,18 @@ object BudgetNotifications {
         )
     }
 
+    fun canPost(context: Context): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (
+            Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        return true
+    }
+
     fun notifyProgress(
         context: Context,
         trackedYen: Long,
@@ -42,14 +54,7 @@ object BudgetNotifications {
         monthEnd: Boolean,
     ): Boolean {
         ensureChannel(context)
-        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
-        if (
-            Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            return false
-        }
+        if (!canPost(context)) return false
 
         val title = when {
             overBudgetYen > 0 -> "月次予算を超えました"

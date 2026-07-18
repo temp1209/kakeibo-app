@@ -51,11 +51,7 @@ fun BudgetSettingsSection(
             Text("予算機能を使う")
             Switch(
                 checked = enabled,
-                onCheckedChange = {
-                    enabled = it
-                    store.setEnabled(it)
-                    onUsableChanged(it && amountValid)
-                },
+                onCheckedChange = { enabled = it },
             )
         }
 
@@ -91,7 +87,8 @@ fun BudgetSettingsSection(
         )
 
         Button(
-            enabled = amountValid,
+            // 無効化は金額未入力でも保存可。有効化時のみ月額必須
+            enabled = !enabled || amountValid,
             onClick = {
                 val saved = BudgetSettings(
                     enabled = enabled,

@@ -23,6 +23,10 @@ class BudgetNotificationWorker(
         if (!budget.isUsable || !notificationPrefs.isAnyBudgetNotificationEnabled()) {
             return Result.success()
         }
+        // 権限不足など投稿不可の間は集計せず、許可後の次回実行でキャッチアップする
+        if (!BudgetNotifications.canPost(applicationContext)) {
+            return Result.success()
+        }
 
         val today = LocalDate.now()
         val yearMonth = YearMonth.from(today)

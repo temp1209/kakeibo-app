@@ -17,12 +17,13 @@ object BudgetNotificationPolicy {
     ): Set<String> {
         if (budgetYen <= 0) return emptySet()
         val due = linkedSetOf<String>()
+        val day = date.dayOfMonth
+        val lastDay = date.lengthOfMonth()
 
-        when {
-            date.dayOfMonth == 10 -> due += REASON_DAY_10
-            date.dayOfMonth == 20 -> due += REASON_DAY_20
-            date.dayOfMonth == date.lengthOfMonth() -> due += REASON_MONTH_END
-        }
+        // 暦日ぴったりでなく、実行遅延時も同月内で取りこぼしを回収する
+        if (day >= 10) due += REASON_DAY_10
+        if (day >= 20) due += REASON_DAY_20
+        if (day >= lastDay) due += REASON_MONTH_END
 
         val percent = trackedYen.coerceAtLeast(0).toDouble() / budgetYen * 100
         when {

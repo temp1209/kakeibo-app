@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
 import work.temp1209.kakeibo.data.prefs.BudgetAggregateMode
@@ -51,11 +55,22 @@ fun AnalysisScreen(
     repo: ReceiptRepository,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var yearMonth by remember { mutableStateOf(YearMonth.now()) }
     var summary by remember { mutableStateOf<ReceiptRepository.MonthAnalysisSummary?>(null) }
     var rawItems by remember { mutableStateOf<List<ReceiptItemEntity>>(emptyList()) }
     var sortByAmount by remember { mutableStateOf(false) }
     var budgetSettings by remember { mutableStateOf(BudgetStore(context).current()) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                budgetSettings = BudgetStore(context).current()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LaunchedEffect(yearMonth) {
         val ym = yearMonth.toString()
