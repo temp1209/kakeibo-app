@@ -1,8 +1,9 @@
-# Phase 10 複数 AI / API プロバイダ — 要件・実装計画
+# Phase 10 複数 AI / API プロバイダ — 要件・実装記録
 
-> **ステータス**: 要件定義（未実装）  
+> **ステータス**: **実装・実機確認完了**（`feat/phase10-multi-ai-provider`、PR 未マージ）
 > **作成日**: 2026-07-14  
-> **作業ブランチ**: `feat/phase10-multi-ai-provider`（着手時に作成）  
+> **実装日**: 2026-07-14〜15  
+> **作業ブランチ**: `feat/phase10-multi-ai-provider`  
 > **親**: [`phase-9.5-brainstorm.md`](phase-9.5-brainstorm.md)  
 > **次**: [`phase-11-budget-notifications.md`](phase-11-budget-notifications.md)
 
@@ -10,151 +11,168 @@
 
 ## 1. 背景と目的
 
-### 課題
+### 課題（着手前）
 
-- 現状は **Gemini 単一 API キー** + `GeminiClient` 直結
-- 無料枠の **quota / 429** で解析が止まると、ユーザー体験が大きく損なわれる
-- メッセージ改善（`GeminiUserMessages`）だけでは **根本解決にならない**
+- Gemini 単一 API キー + `GeminiClient` 直結
+- 無料枠の **quota / 429** で解析が止まると体験が大きく損なわれる
+- メッセージ改善（`GeminiUserMessages`）だけでは根本解決にならない
 
-### 目標
+### 目標（達成）
 
-- **複数の AI プロバイダ / API キー** を登録し、失敗時に **自動で次へ切り替え**（フェイルオーバー）
-- ライン①②③（コンパイル・解析・再スコア）が **共通のルータ** 経由で動作
-- ユーザーは設定で **優先順序** と **キー** を管理
+- **複数の API キー（スロット）** を登録し、失敗時に **自動で次へ切り替え**
+- ライン①②③（コンパイル・解析・再スコア）が **共通の `AiRequestRouter`** 経由
+- 設定で **優先順序** と **キー追加・削除・疎通** を管理
 
-### スコープ外（初版）
+### スコープ外（初版のまま据え置き）
 
-- 同一リクエストのモデルアンサンブル（複数 AI の結果マージ）
-- プロバイダごとに異なる JSON スキーマ（**出力スキーマは共通**を維持）
+- 同一リクエストのモデルアンサンブル
+- プロバイダごとの異なる JSON スキーマ（出力スキーマは共通）
 - クラウド側での API キー共有・同期
+- OpenAI / Claude 等の第 2 プロバイダ種（インターフェースのみ用意）
 
 ---
 
-## 2. 概念モデル
+## 2. 概念モデル（実装どおり）
 
 ```
 ┌─────────────────────────────────────────┐
 │  AiRequestRouter                         │
-│  - 操作種別（解析画像 / テキストJSON）    │
-│  - プロバイダチェーンを順に試行           │
-│  - 429/quota → 次へ。全滅 → 例外         │
+│  - 画像 / テキスト厳格 JSON              │
+│  - 有効スロットを順に試行                │
+│  - 例外 → 次へ。全滅 → AllAi…Exception │
 └─────────────────────────────────────────┘
-         │ implements
-    ┌────┴────┬────────────┐
-    ▼         ▼            ▼
- Gemini    (候補2)     (候補3)
- Provider  Provider    Provider
+         │ uses
+         ▼
+   AiProvider（GeminiAiProvider → GeminiClient）
 ```
 
-| 概念 | 説明 |
+| 概念 | 実装 |
 |------|------|
-| **AiProvider** | 厳格 JSON 生成の共通インターフェース（画像 + テキスト） |
-| **ProviderSlot** | 1 プロバイダ + 1 API キー（またはキー ID）の組 |
-| **ProviderChain** | ユーザー設定の試行順序（リスト） |
-| **AiRequestRouter** | チェーンを辿り、リトライ可能なエラーで次スロットへ |
+| **AiProvider** | `data/ai/AiProvider.kt` |
+| **GeminiAiProvider** | `GeminiClient` の薄いラッパ |
+| **ProviderSlot** | `slotId` / `providerId` / `label` / `enabled` |
+| **AiProviderStore** | EncryptedSharedPreferences（`secrets`）。メタ+キーは原子 `commit` |
+| **GeminiApiKeyStore** | 互換ファサード（オンボーディング・バナー等） |
+| **AiRequestRouter** | 解析・コンパイル・再スコア・疎通 |
 
-### フェイルオーバー対象エラー（案）
+### フェイルオーバー方針（確定）
 
-| エラー | 次へ切替 |
-|--------|----------|
-| HTTP 429 / quota / RESOURCE_EXHAUSTED | ✅ |
-| HTTP 5xx | ✅（要確認） |
-| タイムアウト | ✅（要確認） |
-| 4xx（キー無効・403 等） | ✅（キー切替で救える場合） |
-| パース失敗・スキーマ不一致 | ❌（同プロバイダ再試行は別途。フェイルオーバーしない） |
+| 結果 | 次へ切替 |
+|------|----------|
+| プロバイダ呼び出しが **正常完了**（例外なし） | ❌（その応答を採用） |
+| **上記以外の例外**（HTTP 4xx/5xx・タイムアウト・キー無効など） | ✅ |
+| JSON パース失敗・スキーマ不一致 | ❌（HTTP 成功後。呼び出し側で失敗確定） |
 
 ---
 
-## 3. プロバイダ候補（未確定・要件時に確定）
+## 3. プロバイダ
 
-| 優先 | 候補 | 理由 |
+| 優先 | 候補 | 状態 |
 |------|------|------|
-| 必須 | **Gemini**（現行） | 既存実装の移行先 |
-| 高 | **Gemini 複数キー** | 別 Google アカウントの無料枠をチェーン |
-| 中 | **OpenAI 互換**（GPT-4o mini 等） | 画像 + JSON モード対応モデル |
-| 低 | Claude / その他 | スキーマ・画像 API の差分調査が必要 |
-
-**初版の最小**: Gemini スロットを **複数登録** できるだけでも効果大。2 プロバイダ種は 10.2 で追加可。
+| 必須 | **Gemini**（`gemini-2.5-flash`） | ✅ 実装 |
+| 高 | **Gemini 複数キー**（複数スロット） | ✅ 実装 |
+| 中 | OpenAI 互換 | ⬜ 未着手（`AiProvider` 追加で拡張可） |
+| 低 | Claude / その他 | ⬜ |
 
 ---
 
-## 4. 機能要件
+## 4. 機能（as-built）
 
-### 4.1 データモデル・保存
+### 4.1 保存
 
-```json
-{
-  "slots": [
-    { "slotId": "uuid", "providerId": "GEMINI", "label": "メイン", "apiKey": "...", "enabled": true },
-    { "slotId": "uuid", "providerId": "GEMINI", "label": "予備", "apiKey": "...", "enabled": true }
-  ],
-  "orderedSlotIds": ["...", "..."]
-}
-```
+- `AiProviderStore`: `ai_provider_slots_json` + `ai_provider_ordered_slot_ids` + `ai_api_key_<slotId>`
+- レガシー `gemini_api_key` → 初回読取時にスロット 1 件「メイン」へマイグレーション
+- `orderedSlots()` / `orderedEnabledSlots()`: order に欠ける ID は **末尾補完**（ルータから消えない）
+- バックアップ JSON: **API キーは含めない**（設定画面に注記）。`exportPublicMeta()` で label/順序のみ可
 
-- 端末内保存（既存 `GeminiApiKeyStore` を **AiProviderStore** に発展 or 共存移行）
-- バックアップ: キーは **エクスポート除外** or マスク（セキュリティ要検討）。スロット順序・label のみ同梱可
+### 4.2 設定 UI（`AiProviderSlotsSection`）
 
-### 4.2 設定 UI
-
-| 要素 | 要件 |
+| 要素 | 実装 |
 |------|------|
-| スロット一覧 | ラベル、プロバイダ種別、有効/無効、順序（ドラッグ or 上下） |
-| キー追加 | プロバイダ選択 + キー入力 + 疎通テスト |
-| 疎通テスト | 既存 `testText` 相当を **スロット単位** で実行 |
-| 後方互換 | 既存の単一 Gemini キー → スロット 1 件にマイグレーション |
+| スロット一覧 | ラベル・プロバイダ名・番号 |
+| 順序 | **↑↓ 矢印** およびハンドル **長押しドラッグ** |
+| 追加 | 「APIキーを追加」→ ダイアログ（ラベル + キー） |
+| 削除 | 確認ダイアログ |
+| 疎通 | スロット単位 |
+| やらない | キー更新・有効トグルの細かい編集（追加と削除で十分） |
 
-オンボーディングの API キー入力は **第 1 スロット登録** として接続（Phase 11 と調整）。
+オンボーディング: `GeminiApiKeyStore.saveKey` → `savePrimaryKey`  
+- スロット 0 → 「メイン」新規  
+- 1 件 → そのスロット更新  
+- 複数 → ラベル「メイン」を優先（並び替え後に先頭ダミーを誤上書きしない）
 
-### 4.3 ルータ統合箇所
+### 4.3 ルータ統合
 
-| 呼び出し元 | 現状 | 変更後 |
-|------------|------|--------|
-| `AnalysisWorker` | `GeminiClient.generateStrictJsonFromImage` | `AiRequestRouter` |
-| `NecessityPolicyCompiler` | `GeminiClient.generateStrictJsonFromText` | 同上 |
-| `NecessityRescoreWorker` | 同上 | 同上 |
-| 設定の疎通テスト | `GeminiClient.testText` | スロット指定 or ルータ |
+| 呼び出し元 | 経路 |
+|------------|------|
+| `AnalysisWorker` | `AiRequestRouter.generateStrictJsonFromImage` |
+| `NecessityPolicyCompiler` | `generateStrictJsonFromText`（`ReceiptRepository` 経由） |
+| `NecessityRescoreWorker` | 同上 |
+| 設定疎通 | `AiRequestRouter.testSlot` |
 
-### 4.4 ログ・ユーザー向けフィードバック
+### 4.4 ログ・エラー
 
-- 成功時: どのスロットで成功したかを **デバッグログ**（ユーザー UI は任意）
-- 全スロット失敗: 既存 `GeminiUserMessages` を拡張し「すべての API で上限に達しました」等
-- Phase 11 と連携: 一覧・詳細に **最後の失敗理由** + 使用したスロット数を表示
+- Logcat タグ: **`AiRequestRouter`** / `AnalysisWorker` / `AiProviderStore`
+- 例: `route start order=ダミー → メイン` → `failover from slot=...` → `success ... attempt=2/2`
+- 成功ログ `routed via slot=メイン` は **成功したスロットのみ**（先頭失敗後の切替後でもそう見える）
+- 全滅: `AllAiProvidersFailedException`。cause が 429 ならユーザー向けに利用上限メッセージ
+
+### 4.5 テスト
+
+- `app/src/test/.../data/ai/AiRequestRouterTest.kt`（実ルータ + `resolveSlots` 注入）
 
 ---
 
-## 5. 実装フェーズ（案）
+## 5. 実装ステップ（実績）
 
-| 順 | 内容 | 規模 |
+| 順 | 内容 | 状態 |
 |----|------|------|
-| 10.1 | `AiProvider` インターフェース + `GeminiAiProvider`（現行移行） | M |
-| 10.2 | `AiProviderStore` + 複数スロット・順序 | S |
-| 10.3 | `AiRequestRouter` + 429 フェイルオーバー | M |
-| 10.4 | 設定 UI（スロット管理・疎通） | M |
-| 10.5 | 既存キーマイグレーション + バックアップ方針 | S |
-| 10.6 | 実機（quota 模擬 or 無効キー混在で切替確認） | S |
+| 10.1 | `AiProvider` + `GeminiAiProvider` | ✅ |
+| 10.2 | `AiProviderStore` + 複数スロット・順序 | ✅ |
+| 10.3 | `AiRequestRouter` + 例外時フェイルオーバー | ✅ |
+| 10.4 | 設定 UI | ✅ |
+| 10.5 | レガシー移行 + バックアップ方針（キー除外） | ✅ |
+| 10.6 | 実機確認 | ✅ 2026-07-18、問題なし |
 
 **完了条件**
 
-- [ ] スロット 2 件以上登録し、1 件目が 429 のとき 2 件目で解析成功する
-- [ ] コンパイル・再スコアも同ルータ経由
-- [ ] 全スロット失敗時に分かりやすいエラー
-- [ ] 既存ユーザーの単一キーが移行される
+- [x] スロット 2 件・1 件目失敗で 2 件目成功（単体テスト + 実機で確認可能）
+- [x] コンパイル・再スコアも同ルータ
+- [x] 全スロット失敗時の分かりやすいエラー
+- [x] 既存単一キーのマイグレーション
+- [ ] PR マージ（未）
 
 ---
 
-## 6. リスク
+## 6. 主要コードパス
 
-| リスク | 対策 |
-|--------|------|
-| プロバイダ間で JSON 品質差 | 初版は Gemini 複数キーに絞る。他社は別サブフェーズ |
-| キー漏洩（バックアップ） | キーはバックアップ JSON から除外をデフォルト |
-| フェイルオーバーで遅延増 | 失敗時のみ次へ。成功パスは現状と同じ 1 回 |
+| パス | 役割 |
+|------|------|
+| `data/ai/AiProvider.kt` | インターフェース |
+| `data/ai/GeminiAiProvider.kt` | Gemini 実装 |
+| `data/ai/AiRequestRouter.kt` | フェイルオーバー |
+| `data/ai/AiRouting.kt` | `AllAiProvidersFailedException` / `AiRoutedResult` |
+| `data/ai/ProviderSlot.kt` | スロット・順序 |
+| `data/prefs/AiProviderStore.kt` | 永続化 |
+| `data/prefs/GeminiApiKeyStore.kt` | 互換ファサード |
+| `ui/settings/AiProviderSlotsSection.kt` | 設定 UI |
+| `data/gemini/GeminiClient.kt` | 低レベル HTTP（変更最小） |
 
 ---
 
-## 7. 参照
+## 7. リスク（残）
 
-- 現行: `GeminiClient.kt`, `GeminiApiKeyStore.kt`
-- エラー判定: `GeminiUserMessages.isRateLimited`
+| リスク | 対策・現状 |
+|--------|------------|
+| 他社プロバイダ未対応 | 初版は Gemini 複数キーのみ |
+| キー漏洩 | バックアップから除外 |
+| フェイルオーバー遅延 | 失敗時のみ次へ |
+| 長押しドラッグと縦スクロールの競合 | ↑↓ 矢印を併用 |
+
+---
+
+## 8. 参照
+
 - ブレスト: [`phase-9.5-brainstorm.md`](phase-9.5-brainstorm.md) §0
+- 引き継ぎ: [`../AGENT_HANDOFF.md`](../AGENT_HANDOFF.md)
+- エラー文言: `GeminiUserMessages`

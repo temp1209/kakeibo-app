@@ -8,6 +8,11 @@
   - 対象アプリの **Processだけ**に絞る（アプリ/プロセス選択）。
   - 例外時は `FATAL EXCEPTION` から追う。
 - 追跡が必要な箇所だけ `Log.d("TAG", "...")` で前後関係を残す（入れすぎない）。
+- **Phase 10（複数 API）** の切替確認ではタグを次に限定する:
+  - `AiRequestRouter` … `route start order=` / `failover from slot=` / `success … attempt=`
+  - `AnalysisWorker` … `routed via slot=`（**成功したスロットのみ**。先頭失敗後でも成功側のラベルになる）
+  - `AiProviderStore` … 並び順保存
+  - ※ `Analytics` ではヒットしない
 
 ## 2) ブレークポイント（止めて原因を掘る）
 - 「止める」デバッグは、UIよりも **ビジネスロジック層**（ViewModel / UseCase / Repository）に置くと効率が良い。

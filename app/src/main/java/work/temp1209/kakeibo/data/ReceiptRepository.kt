@@ -28,6 +28,8 @@ import work.temp1209.kakeibo.data.necessity.NecessityCorrection
 import work.temp1209.kakeibo.data.necessity.NecessityPolicyCompiler
 import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
 import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
+import work.temp1209.kakeibo.data.ai.AiRequestRouter
+import work.temp1209.kakeibo.data.prefs.AiProviderStore
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import java.io.File
@@ -680,17 +682,18 @@ class ReceiptRepository(private val context: Context) {
 
     suspend fun compileNecessityPolicy(purposeId: NecessityPurposeId): CompileNecessityPolicyResult =
         withContext(Dispatchers.IO) {
-            val apiKey = GeminiApiKeyStore(context).readKeyOrNull()
-                ?: return@withContext CompileNecessityPolicyResult.ApiKeyMissing
+            if (!GeminiApiKeyStore(context).hasKey()) {
+                return@withContext CompileNecessityPolicyResult.ApiKeyMissing
+            }
             val store = necessityPolicyStore()
             val corrections = store.listCorrections()
             val existing = store.getCompiledPolicyOrNull()
             runCatching {
-                val preview = NecessityPolicyCompiler().buildPreview(
+                val router = AiRequestRouter(AiProviderStore(context))
+                val preview = NecessityPolicyCompiler(router).buildPreview(
                     purposeId = purposeId,
                     corrections = corrections,
                     existingPolicy = existing,
-                    apiKey = apiKey,
                 )
                 CompileNecessityPolicyResult.Success(preview)
             }.getOrElse {
@@ -701,7 +704,8 @@ class ReceiptRepository(private val context: Context) {
     suspend fun commitNecessityPolicy(preview: CompiledNecessityPolicy): CompiledNecessityPolicy =
         withContext(Dispatchers.IO) {
             val store = necessityPolicyStore()
-            NecessityPolicyCompiler().commitCompiledPolicy(store, preview)
+            val router = AiRequestRouter(AiProviderStore(context))
+            NecessityPolicyCompiler(router).commitCompiledPolicy(store, preview)
         }
 
     fun scheduleNecessityRescore() {

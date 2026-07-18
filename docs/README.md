@@ -12,6 +12,7 @@
 | [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) | エージェント / 開発再開時の引き継ぎ |
 | [`DEBUGGING_GUIDE.md`](DEBUGGING_GUIDE.md) | 実機デバッグ手順 |
 | [`EXTERNAL_SETUP.md`](EXTERNAL_SETUP.md) | Gemini API 等の外部設定 |
+| [`PLAY_STORE_PUBLICATION_DECISION.md`](PLAY_STORE_PUBLICATION_DECISION.md) | Play Store 公開に関する意思決定 |
 
 ## フェーズ別の詳細計画
 
@@ -23,8 +24,8 @@
 | [`plans/phase-8-polish.md`](plans/phase-8-polish.md) | 品質ブラッシュアップ | ✅ 完了 |
 | [`plans/phase-9-necessity-policy.md`](plans/phase-9-necessity-policy.md) | 必須度ポリシー | ✅ |
 | [`plans/phase-9.5-brainstorm.md`](plans/phase-9.5-brainstorm.md) | ブレスト・要件分割 | ✅ |
-| [`plans/phase-10-multi-ai-provider.md`](plans/phase-10-multi-ai-provider.md) | 複数 AI / API | ⬜ 次 |
-| [`plans/phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md) | 予算・通知・分析 UI | ⬜ |
+| [`plans/phase-10-multi-ai-provider.md`](plans/phase-10-multi-ai-provider.md) | 複数 AI / API・フェイルオーバー | ✅ 実装（PR 待ち） |
+| [`plans/phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md) | 予算・通知・分析 UI | ⬜ **次** |
 
 ## その他
 
@@ -46,6 +47,7 @@ docs/
 ├── AGENT_HANDOFF.md
 ├── DEBUGGING_GUIDE.md
 ├── EXTERNAL_SETUP.md
+├── PLAY_STORE_PUBLICATION_DECISION.md
 ├── plans/                 ← フェーズ別詳細計画（完了 + 次タスク）
 ├── daily/                 ← 日報
 ├── fixtures/              ← テスト素材

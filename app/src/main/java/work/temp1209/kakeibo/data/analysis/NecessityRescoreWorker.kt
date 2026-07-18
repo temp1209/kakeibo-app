@@ -6,13 +6,13 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import org.json.JSONObject
+import work.temp1209.kakeibo.data.ai.AiRequestRouter
 import work.temp1209.kakeibo.data.db.AppDatabase
-import work.temp1209.kakeibo.data.gemini.GeminiClient
 import work.temp1209.kakeibo.data.gemini.GeminiResponseParser
 import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.prompt.necessity.NecessityRescorePrompt
 import work.temp1209.kakeibo.data.necessity.NecessityRescoreSchema
-import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
+import work.temp1209.kakeibo.data.prefs.AiProviderStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import java.time.YearMonth
 import java.time.ZoneId
@@ -23,11 +23,11 @@ class NecessityRescoreWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val apiKey = GeminiApiKeyStore(applicationContext).readKeyOrNull()
-        if (apiKey == null) {
+        val providerStore = AiProviderStore(applicationContext)
+        if (!providerStore.hasEnabledSlot()) {
             Log.w(TAG, "api key missing")
             return Result.failure(
-                workDataOf(KEY_ERROR_MESSAGE to GeminiApiKeyStore.MISSING_KEY_USER_MESSAGE),
+                workDataOf(KEY_ERROR_MESSAGE to AiProviderStore.MISSING_KEY_USER_MESSAGE),
             )
         }
 
@@ -42,7 +42,7 @@ class NecessityRescoreWorker(
             return Result.success()
         }
 
-        val gemini = GeminiClient()
+        val router = AiRequestRouter(providerStore)
         val chunkSize = NecessityPolicyStore.MAX_ITEMS_PER_RESCORE_REQUEST
         val chunks = allItems.chunked(chunkSize)
         Log.d(TAG, "rescore start month=$yearMonth items=${allItems.size} chunks=${chunks.size}")
@@ -51,12 +51,12 @@ class NecessityRescoreWorker(
         try {
             for ((index, chunk) in chunks.withIndex()) {
                 val prompt = NecessityRescorePrompt.build(chunk, policyBlock, purposeId)
-                val raw = gemini.generateStrictJsonFromText(
-                    apiKey = apiKey,
+                val routed = router.generateStrictJsonFromText(
                     prompt = prompt,
                     responseJsonSchema = NecessityRescoreSchema.responseSchema(),
                 )
-                val scores = parseScores(GeminiResponseParser.extractResponseText(raw))
+                Log.d(TAG, "rescore chunk via slot=${routed.label}")
+                val scores = parseScores(GeminiResponseParser.extractResponseText(routed.rawResponse))
                 val byId = scores.associateBy { it.itemId }
                 val updated = chunk.map { item ->
                     val score = byId[item.itemId]?.necessityScore ?: item.necessityScore

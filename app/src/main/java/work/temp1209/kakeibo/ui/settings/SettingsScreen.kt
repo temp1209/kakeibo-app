@@ -1,15 +1,12 @@
 package work.temp1209.kakeibo.ui.settings
 
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.SnackbarHost
@@ -20,22 +17,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import work.temp1209.kakeibo.data.gemini.GeminiClient
-import work.temp1209.kakeibo.data.gemini.GeminiUserMessages
 import work.temp1209.kakeibo.data.ReceiptRepository
+import work.temp1209.kakeibo.data.prefs.AiProviderStore
 import work.temp1209.kakeibo.data.prefs.FileBackupPrefs
-import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.ui.backup.FileBackupUiState
-import work.temp1209.kakeibo.ui.settings.NecessityPolicySection
-import work.temp1209.kakeibo.ui.settings.GeminiApiKeyInputSection
 import work.temp1209.kakeibo.ui.common.TabScreenTitle
 
 @Composable
@@ -45,15 +34,10 @@ fun SettingsScreen(
     fileBackup: FileBackupUiState,
     backupPrefs: FileBackupPrefs,
 ) {
-    val activity = LocalContext.current as ComponentActivity
-    val store = remember { GeminiApiKeyStore(activity) }
-    val scope = rememberCoroutineScope()
-    val gemini = remember { GeminiClient() }
+    val context = LocalContext.current
+    val providerStore = remember { AiProviderStore(context) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    var apiKeyInput by remember { mutableStateOf("") }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var testing by remember { mutableStateOf(false) }
 
     var lastExportAt by remember { mutableStateOf<String?>(null) }
     var lastImportAt by remember { mutableStateOf<String?>(null) }
@@ -81,48 +65,12 @@ fun SettingsScreen(
         TabScreenTitle("設定")
         SnackbarHost(hostState = snackbarHostState)
 
-        Text("Gemini")
-
-        GeminiApiKeyInputSection(
-            store = store,
-            apiKeyInput = apiKeyInput,
-            onApiKeyInputChange = { apiKeyInput = it },
-        )
-
-        Button(
-            onClick = { showDeleteConfirm = true },
-            enabled = store.hasKey(),
-        ) {
-            Text("APIキーを削除")
-        }
-
-        Button(
-            onClick = {
-                if (testing) return@Button
-                val apiKey = store.readKeyOrNull() ?: return@Button
-                testing = true
-                scope.launch {
-                    val msg = runCatching {
-                        withContext(Dispatchers.IO) {
-                            gemini.testText(apiKey)
-                        }
-                    }.fold(
-                        onSuccess = { "疎通OK" },
-                        onFailure = {
-                            GeminiUserMessages.userFacingError(
-                                it,
-                                GeminiUserMessages.Operation.CONNECTIVITY_TEST,
-                            )
-                        },
-                    )
-                    snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
-                    testing = false
-                }
+        AiProviderSlotsSection(
+            store = providerStore,
+            onShowMessage = { msg ->
+                snackbarHostState.showSnackbar(message = msg, withDismissAction = true)
             },
-            enabled = store.hasKey() && !testing,
-        ) {
-            Text(if (testing) "疎通テスト中..." else "疎通テスト（テキスト）")
-        }
+        )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -135,6 +83,7 @@ fun SettingsScreen(
 
         Text("データのバックアップ")
         Text("レシートデータを JSON ファイルに保存・復元します（画像は含みません）。")
+        Text("APIキーはバックアップに含まれません。")
         Text("最終エクスポート: ${lastExportAt ?: "—"}")
         Text("最終インポート: ${lastImportAt ?: "—"}")
 
@@ -151,25 +100,5 @@ fun SettingsScreen(
         ) {
             Text(if (fileBackup.importing) "インポート中…" else "JSON から復元（マージ）")
         }
-    }
-
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("APIキーを削除しますか？") },
-            text = { Text("削除するとGemini解析ができなくなります。") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        store.deleteKey()
-                        apiKeyInput = ""
-                        showDeleteConfirm = false
-                    },
-                ) { Text("削除") }
-            },
-            dismissButton = {
-                Button(onClick = { showDeleteConfirm = false }) { Text("キャンセル") }
-            },
-        )
     }
 }

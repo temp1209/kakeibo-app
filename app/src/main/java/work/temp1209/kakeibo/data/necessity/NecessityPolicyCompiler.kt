@@ -1,7 +1,7 @@
 package work.temp1209.kakeibo.data.necessity
 
 import org.json.JSONObject
-import work.temp1209.kakeibo.data.gemini.GeminiClient
+import work.temp1209.kakeibo.data.ai.AiRequestRouter
 import work.temp1209.kakeibo.data.gemini.GeminiResponseParser
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import work.temp1209.kakeibo.data.prompt.necessity.NecessityCompilePrompt
@@ -10,7 +10,7 @@ import work.temp1209.kakeibo.data.prompt.necessity.NecessityPresetTemplates
 import java.time.Instant
 
 class NecessityPolicyCompiler(
-    private val gemini: GeminiClient = GeminiClient(),
+    private val router: AiRequestRouter,
 ) {
 
     data class CompileResult(
@@ -19,19 +19,17 @@ class NecessityPolicyCompiler(
     )
 
     fun compile(
-        apiKey: String,
         purposeId: NecessityPurposeId,
         corrections: List<NecessityCorrection>,
         existingPolicy: CompiledNecessityPolicy? = null,
     ): CompileResult {
         val presetBlock = NecessityPresetTemplates.presetBlock(purposeId)
         val prompt = NecessityCompilePrompt.build(purposeId, presetBlock, corrections, existingPolicy)
-        val raw = gemini.generateStrictJsonFromText(
-            apiKey = apiKey,
+        val routed = router.generateStrictJsonFromText(
             prompt = prompt,
             responseJsonSchema = NecessityCompileSchema.responseSchema(),
         )
-        val text = GeminiResponseParser.extractResponseText(raw)
+        val text = GeminiResponseParser.extractResponseText(routed.rawResponse)
         val json = JSONObject(text)
         return CompileResult(
             userSummary = json.getString("userSummary").trim(),
@@ -43,7 +41,6 @@ class NecessityPolicyCompiler(
         purposeId: NecessityPurposeId,
         corrections: List<NecessityCorrection>,
         existingPolicy: CompiledNecessityPolicy?,
-        apiKey: String,
     ): CompiledNecessityPolicy {
         val presetBlock = NecessityPresetTemplates.presetBlock(purposeId)
         val result = if (corrections.isEmpty()) {
@@ -53,7 +50,7 @@ class NecessityPolicyCompiler(
                 userRulesBlock = existingPolicy?.userRulesBlock.orEmpty(),
             )
         } else {
-            compile(apiKey, purposeId, corrections, existingPolicy)
+            compile(purposeId, corrections, existingPolicy)
         }
         val userRules = result.userRulesBlock
         val promptBlock = NecessityPolicyPromptMerger.mergePromptBlock(presetBlock, userRules, purposeId)
