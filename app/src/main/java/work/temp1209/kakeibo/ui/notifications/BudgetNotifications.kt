@@ -85,6 +85,15 @@ object BudgetNotifications {
             .setAutoCancel(true)
             .build()
 
+        // Lint は canPost() 越しの権限チェックを追えないため、notify 直前でも再確認する
+        if (
+            Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+
         return runCatching {
             NotificationManagerCompat.from(context).notify(notificationId, notification)
             true
