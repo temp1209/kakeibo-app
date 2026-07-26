@@ -74,26 +74,35 @@ fun GeminiApiKeyInputSection(
     }
 
     if (showOverwriteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showOverwriteConfirm = false },
-            title = { Text("APIキーを更新しますか？") },
-            text = { Text("既存のAPIキーを上書きします。よろしいですか？") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val trimmed = apiKeyInput.trim()
-                        if (trimmed.isNotEmpty()) {
-                            store.saveKey(trimmed)
-                            onApiKeyInputChange("")
-                            onSaved()
-                        }
-                        showOverwriteConfirm = false
-                    },
-                ) { Text("更新") }
+        ApiKeyOverwriteConfirmDialog(
+            onConfirm = {
+                val trimmed = apiKeyInput.trim()
+                if (trimmed.isNotEmpty()) {
+                    store.saveKey(trimmed)
+                    onApiKeyInputChange("")
+                    onSaved()
+                }
+                showOverwriteConfirm = false
             },
-            dismissButton = {
-                Button(onClick = { showOverwriteConfirm = false }) { Text("キャンセル") }
-            },
+            onDismiss = { showOverwriteConfirm = false },
         )
     }
+}
+
+@Composable
+fun ApiKeyOverwriteConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("APIキーを更新しますか？") },
+        text = { Text("既存のAPIキーを上書きします。よろしいですか？") },
+        confirmButton = {
+            Button(onClick = onConfirm) { Text("更新") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) { Text("キャンセル") }
+        },
+    )
 }

@@ -345,7 +345,6 @@ PR [#3](https://github.com/temp1209/kakeibo-app/pull/3) で `main` にマージ�
 
 ## 将来項目
 
-- [ ] **設定タブ APIキー UI**: 保存済み時は「変更する」で入力欄展開（常時表示しない）— [`REQUIREMENTS.md`](REQUIREMENTS.md) §13
 - [ ] オフライン対応（撮影 → キュー保持 → 後解析）
 - [ ] 送信前プレビューの回転/トリミング
 - [ ] 検索（店名/商品名）
