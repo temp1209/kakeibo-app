@@ -15,6 +15,8 @@ import work.temp1209.kakeibo.data.analysis.AnalysisWorker
 import work.temp1209.kakeibo.data.analysis.NecessityRescoreWorker
 import work.temp1209.kakeibo.data.notifications.NotificationHistory
 import work.temp1209.kakeibo.data.notifications.NotificationHistoryEntry
+import work.temp1209.kakeibo.data.prefs.NotificationPrefs
+import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.db.ReceiptEntity
 import work.temp1209.kakeibo.data.db.ReceiptImageEntity
@@ -33,6 +35,7 @@ import work.temp1209.kakeibo.data.prefs.AiProviderStore
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import java.io.File
+import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -43,6 +46,13 @@ import java.util.UUID
  */
 fun isImageCleanupEligible(analysisStatus: String?): Boolean =
     analysisStatus != "PENDING" && analysisStatus != "RUNNING"
+
+/**
+ * 投入から[staleAfter]以上経っても未処理（QUEUED/RUNNING）のキューは異常（バグ）とみなす。
+ * オフラインが原因なら数日以内に解消するはずなので、この判定はオフライン許容とは別軸。
+ */
+fun isQueueEntryStale(status: String, queuedAt: Instant, now: Instant, staleAfter: Duration): Boolean =
+    (status == "QUEUED" || status == "RUNNING") && queuedAt.isBefore(now.minus(staleAfter))
 
 class ReceiptRepository(private val context: Context) {
     private val dao = AppDatabase.get(context).receiptDao()
@@ -462,9 +472,64 @@ class ReceiptRepository(private val context: Context) {
     }
 
     /**
-     * オフライン対応: 解析未完了（PENDING/RUNNING）のレシートは、40日retentionを
-     * 過ぎていても画像を消さない。長期間オフラインでキュー待機している間に元画像が
-     * 失われると、通信復帰後の解析が「画像がありません」で失敗してしまうため。
+     * 投入から[staleAfter]以上経っても未処理のキューを異常として解析失敗に確定する。
+     * オフラインが原因なら数日以内に解消するはずで、それ以上残るのはバグでスタックしている
+     * 可能性が高い。放置するとキュー・画像がゴミとして無期限に残るため、失敗として確定させ
+     * 既存の失敗一覧・通知フローで気づけるようにする。
+     */
+    suspend fun failStaleQueueEntries(
+        now: Instant = Instant.now(),
+        staleAfter: Duration = Duration.ofDays(7),
+    ): Int = withContext(Dispatchers.IO) {
+        val stale = dao.listInFlightQueueEntries().filter { entry ->
+            isQueueEntryStale(status = entry.status, queuedAt = Instant.parse(entry.queuedAt), now = now, staleAfter = staleAfter)
+        }
+        val notificationPrefs = NotificationPrefs(context)
+        var failedCount = 0
+        for (entry in stale) {
+            val receipt = dao.getReceiptOrNull(entry.receiptId) ?: continue
+            if (receipt.deletedAt != null) {
+                dao.finishQueue(
+                    queueId = entry.queueId,
+                    status = "DONE",
+                    finishedAt = now.toString(),
+                    lastError = null,
+                    attemptCount = entry.attemptCount,
+                )
+                continue
+            }
+            val message = "${staleAfter.toDays()}日以上解析が完了しませんでした。通信状況を確認し、必要なら再送信してください。"
+            val updated = receipt.copy(
+                analysisStatus = "FAILED",
+                analysisCompletedAt = now.toString(),
+                analysisErrorMessage = message,
+                needsReview = 1,
+                updatedAt = now.toString(),
+            )
+            dao.upsertReceipt(updated)
+            dao.finishQueue(
+                queueId = entry.queueId,
+                status = "FAILED",
+                finishedAt = now.toString(),
+                lastError = message,
+                attemptCount = entry.attemptCount,
+            )
+            NotificationHistory.record(context, updated, NotificationHistory.TYPE_FAILED)
+            if (
+                receipt.inputKind != "MANUAL_NO_RECEIPT" &&
+                notificationPrefs.isAnalysisNotificationEnabled(NotificationHistory.TYPE_FAILED)
+            ) {
+                AnalysisNotifications.notifyFailed(context, entry.receiptId)
+            }
+            failedCount++
+        }
+        failedCount
+    }
+
+    /**
+     * 解析未完了（PENDING/RUNNING）のレシートは、40日retentionを過ぎていても画像を消さない。
+     * ただし [failStaleQueueEntries] により長期未処理のキューは先に解析失敗へ確定されるため、
+     * ここで実際に保護されるのは「まだ本当に待機中（数日以内）」の分のみ。
      */
     suspend fun cleanupExpiredImages(now: Instant = Instant.now()): Int = withContext(Dispatchers.IO) {
         val expired = dao.listExpiredImages(now.toString())

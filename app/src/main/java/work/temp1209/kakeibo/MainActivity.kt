@@ -158,6 +158,7 @@ private fun AppNav(
     var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        repo.failStaleQueueEntries()
         repo.cleanupExpiredImages()
     }
 
