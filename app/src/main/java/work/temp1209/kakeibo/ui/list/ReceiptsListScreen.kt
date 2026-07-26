@@ -148,16 +148,17 @@ fun ReceiptsListScreen(
                 TabScreenTitle("一覧")
                 IconButton(
                     onClick = {
-                        when {
-                            !searchBarVisible -> onSearchBarVisibleChange(true)
-                            searchQuery.isNotBlank() -> onSearchQueryChange("")
-                            else -> onSearchBarVisibleChange(false)
+                        if (searchBarVisible) {
+                            onSearchBarVisibleChange(false)
+                            onSearchQueryChange("")
+                        } else {
+                            onSearchBarVisibleChange(true)
                         }
                     },
                 ) {
                     Icon(
                         Icons.Filled.Search,
-                        contentDescription = if (searchBarVisible) "検索をクリア" else "検索",
+                        contentDescription = if (searchBarVisible) "検索を閉じる" else "検索",
                     )
                 }
             }
