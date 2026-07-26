@@ -1,6 +1,5 @@
 package work.temp1209.kakeibo.ui.analysis
 
-import work.temp1209.kakeibo.data.prefs.BudgetAggregateMode
 import work.temp1209.kakeibo.data.prefs.BudgetSettings
 
 data class BudgetProgress(
@@ -20,15 +19,9 @@ fun calculateBudgetProgress(
     if (!settings.isUsable) return null
 
     val budget = settings.monthlyBudgetYen
-    val tracked = when (settings.aggregateMode) {
-        BudgetAggregateMode.TOTAL -> mandatoryYen + discretionaryYen
-        BudgetAggregateMode.DISCRETIONARY_ONLY -> discretionaryYen
-    }.coerceAtLeast(0)
+    val tracked = (mandatoryYen + discretionaryYen).coerceAtLeast(0)
 
-    val mandatoryFraction = when (settings.aggregateMode) {
-        BudgetAggregateMode.TOTAL -> (mandatoryYen.coerceAtLeast(0).toDouble() / budget).coerceIn(0.0, 1.0)
-        BudgetAggregateMode.DISCRETIONARY_ONLY -> 0.0
-    }
+    val mandatoryFraction = (mandatoryYen.coerceAtLeast(0).toDouble() / budget).coerceIn(0.0, 1.0)
     val discretionaryCapacity = 1.0 - mandatoryFraction
     val discretionaryFraction =
         (discretionaryYen.coerceAtLeast(0).toDouble() / budget).coerceIn(0.0, discretionaryCapacity)

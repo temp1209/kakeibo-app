@@ -77,5 +77,4 @@ data class NecessityPolicyBackupDto(
 data class BudgetBackupDto(
     @SerializedName("enabled") val enabled: Boolean,
     @SerializedName("monthlyBudgetYen") val monthlyBudgetYen: Long,
-    @SerializedName("aggregateMode") val aggregateMode: String,
 )

@@ -301,12 +301,9 @@ fun OnboardingWizard(
                         shouldAutoAdvanceIfGranted = !autoSkippedNotification,
                         onPermissionDecision = { granted ->
                             notificationPrefs.setMasterEnabled(granted)
-                            notificationPrefs.setAnalysisFailedEnabled(granted)
-                            notificationPrefs.setAnalysisDoneEnabled(false)
-                            notificationPrefs.setNeedsReviewEnabled(false)
-                            notificationPrefs.setBudgetProgressEnabled(false)
-                            notificationPrefs.setBudgetThreshold80Enabled(false)
-                            notificationPrefs.setBudgetThreshold100Enabled(false)
+                            notificationPrefs.setFailureEnabled(granted)
+                            notificationPrefs.setSuccessEnabled(false)
+                            notificationPrefs.setBudgetEnabled(false)
                         },
                     )
                 }

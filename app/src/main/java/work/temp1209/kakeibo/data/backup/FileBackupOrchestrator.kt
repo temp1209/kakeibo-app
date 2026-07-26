@@ -5,7 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
-import work.temp1209.kakeibo.data.prefs.BudgetAggregateMode
 import work.temp1209.kakeibo.data.prefs.BudgetSettings
 import work.temp1209.kakeibo.data.prefs.BudgetStore
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
@@ -37,7 +36,6 @@ object FileBackupOrchestrator {
         val budgetDto = BudgetBackupDto(
             enabled = budgetSettings.enabled,
             monthlyBudgetYen = budgetSettings.monthlyBudgetYen,
-            aggregateMode = budgetSettings.aggregateMode.name,
         )
         val file = BackupExportBuilder.buildFile(
             context = context,
@@ -64,7 +62,6 @@ object FileBackupOrchestrator {
                 BudgetSettings(
                     enabled = dto.enabled,
                     monthlyBudgetYen = dto.monthlyBudgetYen.coerceAtLeast(0),
-                    aggregateMode = BudgetAggregateMode.fromStored(dto.aggregateMode),
                 ),
             )
         }

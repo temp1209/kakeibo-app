@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import work.temp1209.kakeibo.data.prefs.BudgetAggregateMode
 import work.temp1209.kakeibo.data.prefs.BudgetSettings
 import work.temp1209.kakeibo.data.prefs.BudgetStore
 
@@ -37,7 +35,6 @@ fun BudgetSettingsSection(
     var amountInput by remember {
         mutableStateOf(initial.monthlyBudgetYen.takeIf { it > 0 }?.toString().orEmpty())
     }
-    var aggregateMode by remember { mutableStateOf(initial.aggregateMode) }
     val amount = amountInput.toLongOrNull()
     val amountValid = amount != null && amount > 0
 
@@ -74,18 +71,6 @@ fun BudgetSettingsSection(
             },
         )
 
-        Text("集計対象")
-        BudgetModeRow(
-            label = "すべての支出（必須 + 裁量）",
-            selected = aggregateMode == BudgetAggregateMode.TOTAL,
-            onSelect = { aggregateMode = BudgetAggregateMode.TOTAL },
-        )
-        BudgetModeRow(
-            label = "裁量支出のみ",
-            selected = aggregateMode == BudgetAggregateMode.DISCRETIONARY_ONLY,
-            onSelect = { aggregateMode = BudgetAggregateMode.DISCRETIONARY_ONLY },
-        )
-
         Button(
             // 無効化は金額未入力でも保存可。有効化時のみ月額必須
             enabled = !enabled || amountValid,
@@ -93,7 +78,6 @@ fun BudgetSettingsSection(
                 val saved = BudgetSettings(
                     enabled = enabled,
                     monthlyBudgetYen = amount ?: 0,
-                    aggregateMode = aggregateMode,
                 )
                 store.save(saved)
                 onUsableChanged(saved.isUsable)
@@ -102,23 +86,5 @@ fun BudgetSettingsSection(
         ) {
             Text("予算設定を保存")
         }
-    }
-}
-
-@Composable
-private fun BudgetModeRow(
-    label: String,
-    selected: Boolean,
-    onSelect: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(
-            selected = selected,
-            onClick = onSelect,
-        )
-        Text(label)
     }
 }
