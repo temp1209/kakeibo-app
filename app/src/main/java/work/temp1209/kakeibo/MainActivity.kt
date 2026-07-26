@@ -191,6 +191,8 @@ private fun AppNav(
 
     var listPeriodKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var listLastMonthKey by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
+    var listSearchBarVisible by rememberSaveable { mutableStateOf(false) }
+    var listSearchQuery by rememberSaveable { mutableStateOf("") }
 
     var addExpenseSheetOpen by remember { mutableStateOf(false) }
     var showApiKeyMissingDialog by remember { mutableStateOf(false) }
@@ -460,6 +462,10 @@ private fun AppNav(
                     },
                     loadReceiptRows = { ym -> repo.listReceiptRowsForMonth(ym) },
                     searchReceiptRows = { q -> repo.searchReceiptRows(q) },
+                    searchBarVisible = listSearchBarVisible,
+                    searchQuery = listSearchQuery,
+                    onSearchBarVisibleChange = { listSearchBarVisible = it },
+                    onSearchQueryChange = { listSearchQuery = it },
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
                     onOpenAddExpenseSheet = { addExpenseSheetOpen = true },
                 )

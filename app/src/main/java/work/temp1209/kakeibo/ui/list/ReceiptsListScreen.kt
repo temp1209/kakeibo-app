@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -97,12 +96,16 @@ fun ReceiptsListScreen(
     onPeriodChange: (String) -> Unit,
     loadReceiptRows: suspend (yearMonth: String) -> List<ReceiptListRow>,
     searchReceiptRows: suspend (query: String) -> List<ReceiptListRow>,
+    /** 検索窓の表示状態・検索語は呼び出し側で保持し、レシート詳細往復後も維持する */
+    searchBarVisible: Boolean,
+    searchQuery: String,
+    onSearchBarVisibleChange: (Boolean) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onOpenReceipt: (String) -> Unit,
     onOpenAddExpenseSheet: (() -> Unit)? = null,
 ) {
     var rows by remember { mutableStateOf<List<ReceiptListRow>>(emptyList()) }
-    var searchQuery by remember { mutableStateOf("") }
-    val isSearching = searchQuery.isNotBlank()
+    val isSearching = searchBarVisible && searchQuery.isNotBlank()
     val selectedMonth: YearMonth? =
         if (periodKey == RECEIPTS_LIST_PERIOD_ALL) null else runCatching { YearMonth.parse(periodKey) }.getOrNull()
     var loading by remember(periodKey) { mutableStateOf(true) }
@@ -137,23 +140,37 @@ fun ReceiptsListScreen(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TabScreenTitle("一覧", modifier = Modifier.fillMaxWidth())
-
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("店名・商品名で検索") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (isSearching) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Filled.Close, contentDescription = "検索をクリア")
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TabScreenTitle("一覧")
+                IconButton(
+                    onClick = {
+                        when {
+                            !searchBarVisible -> onSearchBarVisibleChange(true)
+                            searchQuery.isNotBlank() -> onSearchQueryChange("")
+                            else -> onSearchBarVisibleChange(false)
                         }
-                    }
-                },
-                singleLine = true,
-            )
+                    },
+                ) {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = if (searchBarVisible) "検索をクリア" else "検索",
+                    )
+                }
+            }
+
+            if (searchBarVisible) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("店名・商品名で検索") },
+                    singleLine = true,
+                )
+            }
 
             if (isSearching) {
                 Text(
