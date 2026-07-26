@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,6 +23,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
+import kotlinx.coroutines.delay
 import work.temp1209.kakeibo.ui.common.ReceiptAnalysisStatusBadge
 import work.temp1209.kakeibo.ui.common.analysisErrorSummary
 import androidx.compose.ui.text.SpanStyle
@@ -92,20 +95,32 @@ fun ReceiptsListScreen(
     lastMonthKey: String,
     onPeriodChange: (String) -> Unit,
     loadReceiptRows: suspend (yearMonth: String) -> List<ReceiptListRow>,
+    searchReceiptRows: suspend (query: String) -> List<ReceiptListRow>,
+    /** 検索窓の表示状態・検索語は呼び出し側で保持し、レシート詳細往復後も維持する */
+    searchBarVisible: Boolean,
+    searchQuery: String,
+    onSearchBarVisibleChange: (Boolean) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onOpenReceipt: (String) -> Unit,
     onOpenAddExpenseSheet: (() -> Unit)? = null,
 ) {
     var rows by remember { mutableStateOf<List<ReceiptListRow>>(emptyList()) }
+    val isSearching = searchBarVisible && searchQuery.isNotBlank()
     val selectedMonth: YearMonth? =
         if (periodKey == RECEIPTS_LIST_PERIOD_ALL) null else runCatching { YearMonth.parse(periodKey) }.getOrNull()
     var loading by remember(periodKey) { mutableStateOf(true) }
 
     val yearMonthArg = selectedMonth?.toString().orEmpty()
 
-    LaunchedEffect(yearMonthArg) {
+    LaunchedEffect(yearMonthArg, searchQuery) {
         loading = true
         try {
-            rows = loadReceiptRows(yearMonthArg)
+            rows = if (isSearching) {
+                delay(250) // 検索語入力のたびに即クエリしないための簡易デバウンス
+                searchReceiptRows(searchQuery)
+            } else {
+                loadReceiptRows(yearMonthArg)
+            }
         } finally {
             loading = false
         }
@@ -125,58 +140,97 @@ fun ReceiptsListScreen(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TabScreenTitle("一覧", modifier = Modifier.fillMaxWidth())
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FilterChip(
-                    selected = periodKey != RECEIPTS_LIST_PERIOD_ALL,
-                    onClick = {
-                        val key = runCatching { YearMonth.parse(lastMonthKey).toString() }
-                            .getOrElse { YearMonth.now().toString() }
-                        onPeriodChange(key)
-                    },
-                    label = { Text("月別") },
-                )
-                FilterChip(
-                    selected = periodKey == RECEIPTS_LIST_PERIOD_ALL,
-                    onClick = { onPeriodChange(RECEIPTS_LIST_PERIOD_ALL) },
-                    label = { Text("全期間") },
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+                TabScreenTitle("一覧")
                 IconButton(
                     onClick = {
-                        val m = selectedMonth ?: return@IconButton
-                        onPeriodChange(m.minusMonths(1).toString())
+                        if (searchBarVisible) {
+                            onSearchBarVisibleChange(false)
+                            onSearchQueryChange("")
+                        } else {
+                            onSearchBarVisibleChange(true)
+                        }
                     },
-                    enabled = selectedMonth != null,
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "前月")
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = if (searchBarVisible) "検索を閉じる" else "検索",
+                    )
                 }
+            }
+
+            if (searchBarVisible) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("店名・商品名で検索") },
+                    singleLine = true,
+                )
+            }
+
+            if (isSearching) {
                 Text(
-                    text = selectedMonth?.let { "${it.year}年${it.monthValue}月" } ?: "全期間表示",
+                    text = "「$searchQuery」の検索結果（全期間）",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                IconButton(
-                    onClick = {
-                        val m = selectedMonth ?: return@IconButton
-                        val next = m.plusMonths(1)
-                        if (!next.isAfter(YearMonth.now())) {
-                            onPeriodChange(next.toString())
-                        }
-                    },
-                    enabled = selectedMonth != null && selectedMonth.isBefore(YearMonth.now()),
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "翌月")
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(
+                        selected = periodKey != RECEIPTS_LIST_PERIOD_ALL,
+                        onClick = {
+                            val key = runCatching { YearMonth.parse(lastMonthKey).toString() }
+                                .getOrElse { YearMonth.now().toString() }
+                            onPeriodChange(key)
+                        },
+                        label = { Text("月別") },
+                    )
+                    FilterChip(
+                        selected = periodKey == RECEIPTS_LIST_PERIOD_ALL,
+                        onClick = { onPeriodChange(RECEIPTS_LIST_PERIOD_ALL) },
+                        label = { Text("全期間") },
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            val m = selectedMonth ?: return@IconButton
+                            onPeriodChange(m.minusMonths(1).toString())
+                        },
+                        enabled = selectedMonth != null,
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "前月")
+                    }
+                    Text(
+                        text = selectedMonth?.let { "${it.year}年${it.monthValue}月" } ?: "全期間表示",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    IconButton(
+                        onClick = {
+                            val m = selectedMonth ?: return@IconButton
+                            val next = m.plusMonths(1)
+                            if (!next.isAfter(YearMonth.now())) {
+                                onPeriodChange(next.toString())
+                            }
+                        },
+                        enabled = selectedMonth != null && selectedMonth.isBefore(YearMonth.now()),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "翌月")
+                    }
                 }
             }
         }
