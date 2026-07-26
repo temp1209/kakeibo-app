@@ -73,7 +73,7 @@ fun AiProviderSlotsSection(
     }
 
     var showAddDialog by remember { mutableStateOf(false) }
-    var testingSlotId by remember { mutableStateOf<String?>(null) }
+    var adding by remember { mutableStateOf(false) }
     var slotPendingDelete by remember { mutableStateOf<ProviderSlot?>(null) }
 
     var draggingId by remember { mutableStateOf<String?>(null) }
@@ -186,30 +186,6 @@ fun AiProviderSlotsSection(
                             ) {
                                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "下へ")
                             }
-                            TextButton(
-                                onClick = {
-                                    if (testingSlotId != null) return@TextButton
-                                    testingSlotId = slot.slotId
-                                    scope.launch {
-                                        val msg = runCatching {
-                                            withContext(Dispatchers.IO) { router.testSlot(slot.slotId) }
-                                        }.fold(
-                                            onSuccess = { "疎通OK（${slot.label}）" },
-                                            onFailure = {
-                                                GeminiUserMessages.userFacingError(
-                                                    it,
-                                                    GeminiUserMessages.Operation.CONNECTIVITY_TEST,
-                                                )
-                                            },
-                                        )
-                                        onShowMessage(msg)
-                                        testingSlotId = null
-                                    }
-                                },
-                                enabled = testingSlotId == null && store.readApiKey(slot.slotId) != null,
-                            ) {
-                                Text(if (testingSlotId == slot.slotId) "…" else "疎通")
-                            }
                             IconButton(onClick = { slotPendingDelete = slot }) {
                                 Icon(
                                     Icons.Filled.Delete,
@@ -238,12 +214,29 @@ fun AiProviderSlotsSection(
     if (showAddDialog) {
         AddApiKeyDialog(
             defaultLabel = if (slots.isEmpty()) "メイン" else "予備${slots.size}",
+            adding = adding,
             onDismiss = { showAddDialog = false },
             onConfirm = { label, apiKey ->
-                store.addSlot(AiProviderId.GEMINI, label, apiKey, enabled = true)
-                showAddDialog = false
+                if (adding) return@AddApiKeyDialog
+                adding = true
+                val slot = store.addSlot(AiProviderId.GEMINI, label, apiKey, enabled = true)
                 revision++
-                scope.launch { onShowMessage("「$label」を追加しました") }
+                scope.launch {
+                    val testResult = runCatching {
+                        withContext(Dispatchers.IO) { router.testSlot(slot.slotId) }
+                    }.fold(
+                        onSuccess = { "疎通OK" },
+                        onFailure = {
+                            GeminiUserMessages.userFacingError(
+                                it,
+                                GeminiUserMessages.Operation.CONNECTIVITY_TEST,
+                            )
+                        },
+                    )
+                    adding = false
+                    showAddDialog = false
+                    onShowMessage("「$label」を追加しました（$testResult）")
+                }
             },
         )
     }
@@ -272,6 +265,7 @@ fun AiProviderSlotsSection(
 @Composable
 private fun AddApiKeyDialog(
     defaultLabel: String,
+    adding: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (label: String, apiKey: String) -> Unit,
 ) {
@@ -279,7 +273,7 @@ private fun AddApiKeyDialog(
     var apiKey by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!adding) onDismiss() },
         title = { Text("APIキーを追加") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -288,6 +282,7 @@ private fun AddApiKeyDialog(
                     onValueChange = { label = it },
                     label = { Text("ラベル") },
                     singleLine = true,
+                    enabled = !adding,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -297,8 +292,12 @@ private fun AddApiKeyDialog(
                     placeholder = { Text("AIza...") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     singleLine = true,
+                    enabled = !adding,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (adding) {
+                    Text("疎通確認中…", style = MaterialTheme.typography.bodySmall)
+                }
             }
         },
         confirmButton = {
@@ -308,11 +307,11 @@ private fun AddApiKeyDialog(
                     if (key.isEmpty()) return@Button
                     onConfirm(label.trim().ifBlank { defaultLabel }, key)
                 },
-                enabled = apiKey.isNotBlank(),
-            ) { Text("追加") }
+                enabled = apiKey.isNotBlank() && !adding,
+            ) { Text(if (adding) "追加中…" else "追加") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("キャンセル") }
+            TextButton(onClick = onDismiss, enabled = !adding) { Text("キャンセル") }
         },
     )
 }

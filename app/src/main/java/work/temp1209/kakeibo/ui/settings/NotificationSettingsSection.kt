@@ -22,12 +22,9 @@ fun NotificationSettingsSection(
     showBudgetToggle: Boolean,
 ) {
     var masterEnabled by remember { mutableStateOf(prefs.isMasterEnabled()) }
-    var failedEnabled by remember { mutableStateOf(prefs.isAnalysisFailedEnabled()) }
-    var doneEnabled by remember { mutableStateOf(prefs.isAnalysisDoneEnabled()) }
-    var needsReviewEnabled by remember { mutableStateOf(prefs.isNeedsReviewEnabled()) }
-    var budgetProgressEnabled by remember { mutableStateOf(prefs.isBudgetProgressEnabled()) }
-    var budgetThreshold80Enabled by remember { mutableStateOf(prefs.isBudgetThreshold80Enabled()) }
-    var budgetThreshold100Enabled by remember { mutableStateOf(prefs.isBudgetThreshold100Enabled()) }
+    var failureEnabled by remember { mutableStateOf(prefs.isFailureEnabled()) }
+    var successEnabled by remember { mutableStateOf(prefs.isSuccessEnabled()) }
+    var budgetEnabled by remember { mutableStateOf(prefs.isBudgetEnabled()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("通知")
@@ -40,58 +37,31 @@ fun NotificationSettingsSection(
             },
         )
         NotificationToggleRow(
-            label = "解析が失敗したとき",
-            checked = failedEnabled,
+            label = "解析が失敗・要確認のとき",
+            checked = failureEnabled,
             enabled = masterEnabled,
             onCheckedChange = {
-                failedEnabled = it
-                prefs.setAnalysisFailedEnabled(it)
+                failureEnabled = it
+                prefs.setFailureEnabled(it)
             },
         )
         NotificationToggleRow(
             label = "解析が完了したとき",
-            checked = doneEnabled,
+            checked = successEnabled,
             enabled = masterEnabled,
             onCheckedChange = {
-                doneEnabled = it
-                prefs.setAnalysisDoneEnabled(it)
-            },
-        )
-        NotificationToggleRow(
-            label = "要確認のレシートがあるとき",
-            checked = needsReviewEnabled,
-            enabled = masterEnabled,
-            onCheckedChange = {
-                needsReviewEnabled = it
-                prefs.setNeedsReviewEnabled(it)
+                successEnabled = it
+                prefs.setSuccessEnabled(it)
             },
         )
         if (showBudgetToggle) {
             NotificationToggleRow(
-                label = "月次予算の定期確認",
-                checked = budgetProgressEnabled,
+                label = "予算通知（定期確認・80%・100%）",
+                checked = budgetEnabled,
                 enabled = masterEnabled,
                 onCheckedChange = {
-                    budgetProgressEnabled = it
-                    prefs.setBudgetProgressEnabled(it)
-                },
-            )
-            NotificationToggleRow(
-                label = "予算の80%に達したとき",
-                checked = budgetThreshold80Enabled,
-                enabled = masterEnabled,
-                onCheckedChange = {
-                    budgetThreshold80Enabled = it
-                    prefs.setBudgetThreshold80Enabled(it)
-                },
-            )
-            NotificationToggleRow(
-                label = "予算の100%に達したとき",
-                checked = budgetThreshold100Enabled,
-                enabled = masterEnabled,
-                onCheckedChange = {
-                    budgetThreshold100Enabled = it
-                    prefs.setBudgetThreshold100Enabled(it)
+                    budgetEnabled = it
+                    prefs.setBudgetEnabled(it)
                 },
             )
         }

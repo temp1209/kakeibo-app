@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import work.temp1209.kakeibo.data.ReceiptRepository
-import work.temp1209.kakeibo.data.prefs.BudgetAggregateMode
 import work.temp1209.kakeibo.data.prefs.BudgetNotificationStateStore
 import work.temp1209.kakeibo.data.prefs.BudgetStore
 import work.temp1209.kakeibo.data.prefs.NotificationPrefs
@@ -31,29 +30,14 @@ class BudgetNotificationWorker(
         val today = LocalDate.now()
         val yearMonth = YearMonth.from(today)
         val summary = ReceiptRepository(applicationContext).monthAnalysisSummary(yearMonth.toString())
-        val trackedYen = when (budget.aggregateMode) {
-            BudgetAggregateMode.TOTAL -> summary.mandatoryYen + summary.discretionaryYen
-            BudgetAggregateMode.DISCRETIONARY_ONLY -> summary.discretionaryYen
-        }
+        val trackedYen = summary.mandatoryYen + summary.discretionaryYen
         val stateStore = BudgetNotificationStateStore(applicationContext)
         val dueReasons = BudgetNotificationPolicy.dueReasons(
             date = today,
             trackedYen = trackedYen,
             budgetYen = budget.monthlyBudgetYen,
             alreadySent = stateStore.sentReasons(yearMonth),
-        ).filterTo(linkedSetOf()) { reason ->
-            when (reason) {
-                BudgetNotificationPolicy.REASON_DAY_10,
-                BudgetNotificationPolicy.REASON_DAY_20,
-                BudgetNotificationPolicy.REASON_MONTH_END
-                -> notificationPrefs.isBudgetProgressEnabled()
-                BudgetNotificationPolicy.REASON_THRESHOLD_80 ->
-                    notificationPrefs.isBudgetThreshold80Enabled()
-                BudgetNotificationPolicy.REASON_THRESHOLD_100 ->
-                    notificationPrefs.isBudgetThreshold100Enabled()
-                else -> false
-            }
-        }
+        )
         if (dueReasons.isEmpty()) return Result.success()
 
         val percent = ((trackedYen.toDouble() / budget.monthlyBudgetYen) * 100)

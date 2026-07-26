@@ -39,7 +39,6 @@ class BackupBudgetCompatibilityTest {
             budget = BudgetBackupDto(
                 enabled = true,
                 monthlyBudgetYen = 80_000,
-                aggregateMode = "DISCRETIONARY_ONLY",
             ),
         )
 
@@ -47,7 +46,6 @@ class BackupBudgetCompatibilityTest {
 
         assertEquals("1.3", restored.backupSchemaVersion)
         assertEquals(80_000L, restored.budget?.monthlyBudgetYen)
-        assertEquals("DISCRETIONARY_ONLY", restored.budget?.aggregateMode)
     }
 
     @Test

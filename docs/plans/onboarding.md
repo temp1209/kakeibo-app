@@ -323,9 +323,9 @@ Phase 7.1 実装後の精査。**クリティカルな問題はなし**。M1/M2 
 | L1 | 画面回転で Wizard ステップがリセット | `rememberSaveable` 化 | ✅ Phase 8 |
 | L2 | 「準備完了」画面でアプリ終了すると未完了扱い | `onboarding_completed` は「はじめる」押下時のみ `true` | 意図どおり |
 | L3 | アップデートユーザー全員に Wizard が1回出る | 計画どおり | 意図どおり |
-| L4 | 上書き確認ダイアログの重複 | `OnboardingWizard` と `GeminiApiKeyInputSection` | 未着手 |
+| L4 | 上書き確認ダイアログの重複 | `OnboardingWizard` と `GeminiApiKeyInputSection` | ✅ 解消（2026-07-27、`GeminiApiKeyInputSection` に一本化） |
 | L5 | `showOnboarding` が起動時 prefs のみ参照 | 通常は問題にならない | 意図どおり |
-| L6 | オンボーディング拒否後、カメラタブで即再リクエスト | `requireCameraPermission(autoRequest=true)` | 未着手 |
+| L6 | オンボーディング拒否後、カメラタブで即再リクエスト | `requireCameraPermission(autoRequest=true)` | 意図どおり（カメラ必須のコアアプリのため） |
 | L7 | `GeminiApiKeyStore.saveKey("")` 防御 | Store 側ガード | ✅ Phase 8 |
 
 ### 確認済み（問題なし・意図どおり）

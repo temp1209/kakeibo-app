@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -42,6 +41,7 @@ import work.temp1209.kakeibo.data.prefs.BudgetSettings
 import work.temp1209.kakeibo.data.prefs.BudgetStore
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.prefs.NotificationPrefs
+import work.temp1209.kakeibo.ui.settings.ApiKeyOverwriteConfirmDialog
 import work.temp1209.kakeibo.ui.settings.GeminiApiKeyInputSection
 
 private enum class OnboardingStep {
@@ -301,12 +301,9 @@ fun OnboardingWizard(
                         shouldAutoAdvanceIfGranted = !autoSkippedNotification,
                         onPermissionDecision = { granted ->
                             notificationPrefs.setMasterEnabled(granted)
-                            notificationPrefs.setAnalysisFailedEnabled(granted)
-                            notificationPrefs.setAnalysisDoneEnabled(false)
-                            notificationPrefs.setNeedsReviewEnabled(false)
-                            notificationPrefs.setBudgetProgressEnabled(false)
-                            notificationPrefs.setBudgetThreshold80Enabled(false)
-                            notificationPrefs.setBudgetThreshold100Enabled(false)
+                            notificationPrefs.setFailureEnabled(granted)
+                            notificationPrefs.setSuccessEnabled(false)
+                            notificationPrefs.setBudgetEnabled(false)
                         },
                     )
                 }
@@ -329,26 +326,17 @@ fun OnboardingWizard(
     }
 
     if (showApiKeyOverwriteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showApiKeyOverwriteConfirm = false },
-            title = { Text("APIキーを更新しますか？") },
-            text = { Text("既存のAPIキーを上書きします。よろしいですか？") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val trimmed = apiKeyInput.trim()
-                        if (trimmed.isNotEmpty()) {
-                            apiKeyStore.saveKey(trimmed)
-                            apiKeyInput = ""
-                            advanceFromApiKey()
-                        }
-                        showApiKeyOverwriteConfirm = false
-                    },
-                ) { Text("更新") }
+        ApiKeyOverwriteConfirmDialog(
+            onConfirm = {
+                val trimmed = apiKeyInput.trim()
+                if (trimmed.isNotEmpty()) {
+                    apiKeyStore.saveKey(trimmed)
+                    apiKeyInput = ""
+                    advanceFromApiKey()
+                }
+                showApiKeyOverwriteConfirm = false
             },
-            dismissButton = {
-                Button(onClick = { showApiKeyOverwriteConfirm = false }) { Text("キャンセル") }
-            },
+            onDismiss = { showApiKeyOverwriteConfirm = false },
         )
     }
 }

@@ -41,7 +41,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.db.ReceiptItemEntity
-import work.temp1209.kakeibo.data.prefs.BudgetAggregateMode
 import work.temp1209.kakeibo.data.prefs.BudgetSettings
 import work.temp1209.kakeibo.data.prefs.BudgetStore
 import work.temp1209.kakeibo.ui.common.TabScreenTitle
@@ -170,13 +169,6 @@ fun AnalysisScreen(
                                 "使用 ${formatYen(budgetProgress.trackedYen)}（${budgetProgress.percent}%）",
                                 style = MaterialTheme.typography.labelLarge,
                             )
-                            if (budgetSettings.aggregateMode == BudgetAggregateMode.DISCRETIONARY_ONLY) {
-                                Text(
-                                    "裁量支出のみを予算と比較しています。必須支出は参考表示です。",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
                             if (budgetProgress.overBudgetYen > 0) {
                                 Text(
                                     "予算超過 ${formatYen(budgetProgress.overBudgetYen)}",
