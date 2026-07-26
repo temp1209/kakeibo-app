@@ -349,7 +349,7 @@ PR [#3](https://github.com/temp1209/kakeibo-app/pull/3) で `main` にマージ�
 - [ ] 送信前プレビューの回転/トリミング
 - [ ] 検索（店名/商品名）
 - [ ] バックアップ暗号化（パスフレーズ）
-- [ ] Android Auto Backup で API キーを除外（`backup_rules.xml`）
+- [x] ~~Android Auto Backup で API キーを除外~~ — 2026-07-27 完了（`data_extraction_rules.xml` / `backup_rules.xml` で `secrets.xml` を除外）
 - [ ] ~~Drive 自動バックアップ~~ — 個人利用スコープでは再検討しない（履歴は git に残存）
 
 ---

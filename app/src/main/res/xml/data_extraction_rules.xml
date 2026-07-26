@@ -5,15 +5,11 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- EncryptedSharedPreferences（AiProviderStore）はAndroid Keystoreの鍵に紐づき、
+             復元先の端末では復号できないため除外する -->
+        <exclude domain="sharedpref" path="secrets.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="secrets.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>
