@@ -37,6 +37,13 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
+/**
+ * オフライン対応: 解析が未完了（PENDING/RUNNING）のレシートは retention 経過後も
+ * 画像削除の対象にしない。レシートが見つからない場合（既に削除済み等）は対象にする。
+ */
+fun isImageCleanupEligible(analysisStatus: String?): Boolean =
+    analysisStatus != "PENDING" && analysisStatus != "RUNNING"
+
 class ReceiptRepository(private val context: Context) {
     private val dao = AppDatabase.get(context).receiptDao()
 
@@ -454,10 +461,19 @@ class ReceiptRepository(private val context: Context) {
         dao.getLatestGeminiResultOrNull(receiptId)?.rawJson
     }
 
+    /**
+     * オフライン対応: 解析未完了（PENDING/RUNNING）のレシートは、40日retentionを
+     * 過ぎていても画像を消さない。長期間オフラインでキュー待機している間に元画像が
+     * 失われると、通信復帰後の解析が「画像がありません」で失敗してしまうため。
+     */
     suspend fun cleanupExpiredImages(now: Instant = Instant.now()): Int = withContext(Dispatchers.IO) {
         val expired = dao.listExpiredImages(now.toString())
         var deleted = 0
         for (img in expired) {
+            val receipt = dao.getReceiptOrNull(img.receiptId)
+            if (!isImageCleanupEligible(receipt?.analysisStatus)) {
+                continue
+            }
             val uri = runCatching { Uri.parse(img.localUri) }.getOrNull() ?: continue
             val file = uri.toFileOrNull() ?: continue
             if (file.exists()) {
