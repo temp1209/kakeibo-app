@@ -459,6 +459,7 @@ private fun AppNav(
                         }
                     },
                     loadReceiptRows = { ym -> repo.listReceiptRowsForMonth(ym) },
+                    searchReceiptRows = { q -> repo.searchReceiptRows(q) },
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
                     onOpenAddExpenseSheet = { addExpenseSheetOpen = true },
                 )

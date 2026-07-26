@@ -244,6 +244,16 @@ class ReceiptRepository(private val context: Context) {
         }
     }
 
+    /** 店名・商品名の部分一致検索（全期間対象）。空白のみの検索語は空リストを返す。 */
+    suspend fun searchReceiptRows(query: String) = withContext(Dispatchers.IO) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            emptyList()
+        } else {
+            dao.searchReceiptRows("%$trimmed%")
+        }
+    }
+
     suspend fun getReceiptOrNull(receiptId: String) = withContext(Dispatchers.IO) {
         dao.getReceiptOrNull(receiptId)
     }
