@@ -96,7 +96,11 @@ class AnalysisWorker(
                     )
                     continue
                 }
-                val flags = GeminiStrictParser.reviewFlags(parsed, confidenceThreshold = 0.7)
+                val flags = GeminiStrictParser.reviewFlags(
+                    parsed,
+                    confidenceThreshold = 0.7,
+                    savedAt = head?.capturedAt,
+                )
                 Log.d(TAG, "parsed strictJson items=${parsed.items.size} needsReview=${flags.needsReview}")
 
                 val merchantName = parsed.receipt.merchantName
