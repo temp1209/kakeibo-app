@@ -4,17 +4,27 @@ import work.temp1209.kakeibo.data.necessity.NecessityPurposeId
 import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import work.temp1209.kakeibo.data.prompt.necessity.NecessityPresetTemplates
 import work.temp1209.kakeibo.data.prompt.necessity.NecessityScorePromptSections
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** ライン②: レシート画像解析用プロンプト */
 object ReceiptAnalysisPrompt {
 
-    fun buildFromStore(store: NecessityPolicyStore): String = build(
+    fun buildFromStore(
+        store: NecessityPolicyStore,
+        today: LocalDate = LocalDate.now(ZoneId.of("Asia/Tokyo")),
+    ): String = build(
         userPolicyBlock = store.getEffectivePromptBlock(),
         purposeId = store.getPurposeId(),
+        today = today,
     )
 
-    fun build(userPolicyBlock: String, purposeId: NecessityPurposeId): String =
-        EXTRACTION_AND_CLASSIFICATION.trimMargin() + "\n\n" +
+    fun build(
+        userPolicyBlock: String,
+        purposeId: NecessityPurposeId,
+        today: LocalDate = LocalDate.now(ZoneId.of("Asia/Tokyo")),
+    ): String =
+        extractionAndClassification(today).trimMargin() + "\n\n" +
             NecessityScorePromptSections.build(
                 userPolicyBlock = userPolicyBlock,
                 scoreBands = NecessityPresetTemplates.scoreBands(purposeId),
@@ -22,7 +32,7 @@ object ReceiptAnalysisPrompt {
             ) + "\n\n" +
             AMOUNT_AND_WARNINGS.trimMargin()
 
-    private val EXTRACTION_AND_CLASSIFICATION = """
+    private fun extractionAndClassification(today: LocalDate): String = """
         |あなたは家計簿アプリのOCR/分類エンジンです。入力は **レシートの写真**（紙・電子レシートの表示を撮影したもの）に限らず、**レシートと同等の購入・会計情報が写っているスクリーンショット**（スマホ・PC の画面キャプチャ）も受け取ります。いずれも「購入を示す伝票・明細・合計・店名・日付」が読み取れる範囲で、同じルールで抽出し、必ず「指定スキーマの厳格JSONのみ」を返してください。
         |
         |## 入力画像の種別（写真とスクリーンショット）
@@ -63,9 +73,17 @@ object ReceiptAnalysisPrompt {
         |## receipt ヘッダー
         |- merchantName: 店舗名として最も分かりやすい表記（チェーン名＋支店名が印字されていればそのまま近い形でよい）
         |- receiptDatetime: **必ず ISO 8601 形式**で、タイムゾーンは日本標準時を想定し末尾を **+09:00** とする。
-        |  例: `2024-05-01T14:30:00+09:00`
-        |  時刻が印字されない場合は `2024-05-01T00:00:00+09:00` とし、warnings に `[日時]` で「時刻不明」と短く書く。
+        |  形式: `YYYY-MM-DDTHH:mm:ss+09:00`（YYYY はレシートに印字された実際の西暦4桁をそのまま使う）
+        |  時刻が印字されない場合は `YYYY-MM-DDT00:00:00+09:00` とし、warnings に `[日時]` で「時刻不明」と短く書く。
         |  日付自体が判読不能な場合は、判読できる範囲で最善の日付を入れ confidence を下げ、warnings に `[日時]` を付ける（空文字は不可）。
+        |
+        |### 日付・年の読み取り（重要: 誤読・誤補正が起きやすい箇所）
+        |- 参考情報（あくまで目安、印字の数字を上書きする根拠にはしない）: この解析が行われているカレンダー上の日付はおよそ **$today**（日本時間）。レシートの日付は通常この日以前〜数週間・数ヶ月前であることが多い。
+        |- 日本のレシートに印字される日付表記の例:
+        |  - 4桁西暦（`YYYY/MM/DD` `YYYY-MM-DD` `YYYY年MM月DD日` など）はそのまま読む。
+        |  - **6桁連続数字 `YYMMDD`**（例: `260804`）は、コンビニ・飲食チェーンのレシート管理番号欄などでよく使われ、多くの場合「**西暦下2桁+月2桁+日2桁**」を意味する（`260804` → 2026年08月04日）。この先頭2桁は**元号（令和など）の年数ではない**。
+        |  - `令和6年8月4日` のように元号が明記されている場合のみ、元号→西暦変換（令和1年=2019年、令和 n 年=2018+n 年）を行う。元号の明記がない数字列を、勝手に元号年として扱わない。
+        |- **「学習データ上よくある年」への丸め込みを禁止する**。読み取った西暦の下2桁が大きい・見慣れない・今日より未来に見える等の理由だけで、別の年（例: 26→24）に置き換えてはならない。**印字された数字をそのまま信頼して転記**し、確信が持てない場合のみ confidence を下げ、warnings に `[日時]` を付ける。年を捏造・改変しないこと。
         |- capturedAt: 入力画像（紙レシート印字・画面表示のいずれか）に「撮影日時」「表示日時」等が読める場合のみ同じ ISO 8601（+09:00）で入れる。なければ省略または空でよい（スキーマ上は任意）。
         |- totalAmountYen: 顧客が支払った **支払合計（税込が主なら税込）** を整数円で。印字に複数の「合計」がある場合は、**領収・会計として最終の支払額**を優先する。
         |- paymentMethod: 次の対応で列挙値に正規化する。判断できなければ **UNKNOWN**。
