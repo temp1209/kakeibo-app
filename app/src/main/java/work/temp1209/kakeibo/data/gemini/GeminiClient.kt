@@ -148,7 +148,7 @@ class GeminiClient(
     companion object {
         private const val TAG = "GeminiClient"
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-        private const val MODEL = "gemini-2.5-flash"
+        private const val MODEL = "gemini-3.6-flash"
         private const val JSON = "application/json; charset=utf-8"
     }
 }
