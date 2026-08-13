@@ -13,7 +13,8 @@ android {
         applicationId = "work.temp1209.kakeibo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        // CI配布ビルドはこの値を上書きし、Firebase App Distribution上でビルドを区別できるようにする。
+        versionCode = (project.findProperty("versionCodeOverride") as String?)?.toIntOrNull() ?: 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
