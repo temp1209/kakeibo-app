@@ -1,28 +1,50 @@
 # エージェント引き継ぎメモ
 
-**最終更新**: 2026-07-27
-**作業ブランチ**: `feat/offline-support`（`main` 取り込み済み、マージ待ち）
-**ベース**: `main`（Phase 10 PR #7 / Phase 11 マージ済み、UI/UX ブラッシュアップ・オフライン対応・検索機能 実施済み）
+**最終更新**: 2026-08-16
+**作業ブランチ**: なし（`main` が最新。新規開発は一旦停止中）
+**ベース**: `main`（Phase 7〜11・UI/UXブラッシュアップ・検索・オフライン対応・レシート日付誤読修正まで全てマージ済み）
 
 ---
 
 ## いま何をしているか
 
-**Phase 10・11 はいずれも `main` にマージ済み。UI/UX ブラッシュアップ → オフライン対応・検索機能まで実施。**
+**2026-08-16、レシート日付誤読修正のブランチ（`claude/nakau-receipt-date-recognition-adow19`）をマージし、`main` は開発上の未マージ作業が無い状態になった。**
 
-| 優先 | Phase | 内容 | 状態 |
-|------|-------|------|------|
-| ✅ | 9.5 | ブレスト + 要件定義 | PR #6 マージ済 |
-| ✅ | **10** | 複数 API・フェイルオーバー | PR #7 マージ済み |
-| ✅ | **11** | 予算・通知・分析グラフ・失敗 UI | **完了（`main` マージ）** |
-| ✅ | — | UI/UX ブラッシュアップ（使わない設定の整理） | PR #9 マージ済み（下記） |
-| ✅ | — | 検索機能（店名/商品名） | PR #10 マージ済み（下記） |
-| 仕上げ | — | オフライン対応 | `feat/offline-support` 実装・検証済み、`main` マージ待ち（下記） |
-| — | 5.1 | プロンプトチューニング | 実利用並行 |
+このタイミングで実利用フィードバックとして「レシート送信後、解析が返ってこないことが多い（体感半分ほど）。解析キューに約10件滞留」という新しい不具合が発覚した（[`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §5）。コードレビューでは原因を「解析処理自体の失敗」ではなく「`WorkManager` のジョブ投入・実行がバッテリー最適化等で滞っている」可能性が高いと推測したが、実機ログでの裏付けはまだ無い。
 
-**次**: `feat/offline-support` を `main` へマージ → 5.1、または残りの将来項目（再解析・通知細分化等）の要否判断
+**方針**: 新規機能開発は一旦停止し、以下を優先する。
 
-### オフライン対応（2026-07-27・実装・main マージ待ち）
+1. 端末側の設定（バッテリー最適化の対象外設定など）を見直す
+2. しばらく実利用しながら、解析キューの滞留が解消するか・再発するかを観察する
+3. 再発するようなら Logcat（フィルタ: `AnalysisWorker|AiRequestRouter`）や `analysis_queue` テーブルの中身を確認し、原因を特定する
+
+次にエージェントとして着手する際は、まず [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §5 の状況（ユーザーが様子見した結果どうだったか）を確認すること。
+
+| 優先 | 内容 | 状態 |
+|------|------|------|
+| ✅ | Phase 1〜11・UI/UXブラッシュアップ・検索・オフライン対応 | 全て `main` マージ済み |
+| ✅ | レシート日付誤読修正・Geminiモデル更新(gemini-3.6-flash)・配布CI・PIIガードレール | PR #14 マージ済み（2026-08-16） |
+| 🔍 | 解析キューの滞留（体感50%返ってこない） | 調査中・様子見。`KNOWN_ISSUES.md` §5 |
+| — | 5.1 プロンプトチューニング等の将来項目 | 保留（滞留問題が優先） |
+
+### レシート日付誤読修正・関連対応（2026-08-16・実施済み・PR #14）
+
+- AI誤読(年ズレ)修正、日付表記の汎用対応、端末保存時刻との突き合わせによる機械的な異常検知の保険（`GeminiStrictParser.detectDateAnomaly`）
+- Geminiモデル名を `gemini-2.5-flash` → `gemini-3.6-flash` に更新（旧モデルが新規APIキーで404を返すようになったため。3.6はGA・画像入力対応をWeb検索で確認済み）
+- push時にFirebase App Distributionへ自動配布するCI（`.github/workflows/distribute.yml`）を追加。ただし `FIREBASE_APP_ID` / `FIREBASE_SERVICE_ACCOUNT_JSON` の GitHub Secrets が未設定のため、現状 `distribute` ジョブは失敗する（必須チェックではないためマージはブロックされない）。配布を有効化する場合はこの2つのSecretsを設定すること
+- 個人情報のコミットを防ぐガードレール: `CLAUDE.md` にルールを明文化、`scripts/check-no-pii.sh`、CI（`.github/workflows/pii-check.yml`）
+- 関連コード: `GeminiStrictParser.kt`, `GeminiAiProvider.kt`, `GeminiClient.kt`, `ReceiptAnalysisPrompt.kt`
+
+### 解析キューの滞留（2026-08-16・調査中）
+
+詳細は [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §5 を参照。要点のみ:
+
+- `AnalysisWorker` 自体はAPI失敗を必ず `FAILED` に確定させる作りなので、「エラー通知も無く静かに滞留する」のは処理失敗ではなく `WorkManager` のジョブ実行が滞っている可能性が高い
+- `scheduleAnalysisWork()` の `enqueueUniqueWork(..., ExistingWorkPolicy.KEEP, ...)` が、前回ジョブが残っている間は新規投入をスキップする点が怪しい
+- バッテリー最適化・Doze モードの影響を確認する必要あり（未実施）
+- `failStaleQueueEntries()`（7日超で強制失敗）は既にあるが、今回のような短期滞留には効かない
+
+### オフライン対応（2026-07-27・実装・PR #11 マージ済み）
 
 調査の結果、撮影・キュー投入・`WorkManager`（`NetworkType.CONNECTED`制約）による自動待機・復帰後実行は既に成立済みだった（大きな新機能ではなく穴埋め2点）。
 
@@ -78,7 +100,7 @@
 
 ### Logcat
 
-フィルター例: `AiRequestRouter|AnalysisWorker|AiProviderStore`  
+フィルター例: `AiRequestRouter|AnalysisWorker|AiProviderStore`
 （`Analytics` では出ない）
 
 ---
@@ -95,8 +117,8 @@
 
 ## 推奨セッション開始手順
 
-1. `main` を最新化して作業ブランチを切る（`feat/offline-support` が未マージなら先にマージ）
-2. 後続候補: 5.1 プロンプトチューニング、または将来項目の要否判断（再解析・通知細分化等、`IMPLEMENTATION_PLAN.md`「将来項目」参照）
-3. Phase 11 詳細: [`phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md)
+1. `main` を最新化（未マージブランチは無いはずだが、`git branch -a` で確認）
+2. [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §5（解析キューの滞留）の状況をユーザーに確認 — 解消していれば §5 をクローズ、再発していれば実機ログでの原因調査に着手
+3. 上記が片付いていれば、5.1 プロンプトチューニング、または将来項目の要否判断（`IMPLEMENTATION_PLAN.md`「将来項目」参照）
 
 CodeGraph: `codegraph_explore` を先に。`projectPath` にリポジトリルート。

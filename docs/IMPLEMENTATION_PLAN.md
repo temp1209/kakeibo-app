@@ -1,14 +1,14 @@
 # 実装計画
 
-> **現行版**（2026-07-18 更新）。旧版は [`archive/`](archive/) を参照。索引は [`README.md`](README.md)。
+> **現行版**（2026-08-16 更新）。旧版は [`archive/`](archive/) を参照。索引は [`README.md`](README.md)。
 
-Phase 7〜9 完了。**Phase 10** 複数 AI/API は PR #7 でマージ済み。**Phase 11** 予算・通知・分析 UI は完了（`main` マージ）。
+Phase 7〜11 完了。UI/UXブラッシュアップ・検索機能・オフライン対応・レシート日付誤読修正まで実施済み。**2026-08-16時点で新規開発は一旦停止し、設定を見直したうえで実利用しながら様子を見るフェーズ**（詳細: [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md)、未解決の課題は [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §5 解析キューの滞留）。
 
 **前版**: [`archive/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md`](archive/IMPLEMENTATION_PLAN_REVISED_2026-06-16.md)（Phase 7 着手時の計画）
 
 ---
 
-## 現状の到達点（2026-07-18）
+## 現状の到達点（2026-08-16）
 
 ### 完了済み
 
@@ -23,6 +23,12 @@ Phase 7〜9 完了。**Phase 10** 複数 AI/API は PR #7 でマージ済み。*
 | **8.1〜8.3** | 品質ブラッシュアップ中核 | 実機確認済み |
 | **9** | 必須度ポリシー | PR #5 |
 | **9.5** | ブレスト + Phase 10/11 要件 | PR #6 |
+| **10** | 複数 AI/API・フェイルオーバー | PR #7 マージ済み |
+| **11** | 予算・通知・分析 UI・失敗 UX | `main` マージ済み |
+| UI/UX ブラッシュアップ | 通知設定統合・予算集計簡略化・APIキー自動疎通確認 | PR #9 マージ済み |
+| 検索機能 | 店名・商品名の部分一致検索 | PR #10 マージ済み |
+| オフライン対応 | 画像retentionの穴埋め・7日超キューの異常検出 | PR #11 マージ済み |
+| レシート日付誤読修正・関連対応 | 日付表記の汎用対応、機械的な異常検知、Geminiモデル更新(gemini-3.6-flash)、配布CI・PIIガードレール | PR #14 マージ済み（2026-08-16） |
 
 ### Phase 7 — **完了**（PR #3 マージ済み）
 
@@ -49,7 +55,7 @@ Phase 7〜9 完了。**Phase 10** 複数 AI/API は PR #7 でマージ済み。*
 
 詳細: [`plans/phase-9.5-brainstorm.md`](plans/phase-9.5-brainstorm.md) / [`phase-10-multi-ai-provider.md`](plans/phase-10-multi-ai-provider.md) / [`phase-11-budget-notifications.md`](plans/phase-11-budget-notifications.md)
 
-**次**: UI/UX ブラッシュアップ（設定整理など）または 5.1 プロンプト
+**次**: UI/UXブラッシュアップ・検索・オフライン対応・日付誤読修正まで一通り完了。2026-08-16時点では新規機能追加を一旦止め、`KNOWN_ISSUES.md` §5（解析キューの滞留）の様子見と設定の見直しを優先。詳細は `AGENT_HANDOFF.md` を参照
 
 ### 並行トラック
 
