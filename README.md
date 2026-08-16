@@ -119,7 +119,7 @@ APIキーは複数スロットを優先順に試し、レート制限や一時�
 | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | 要件定義（UX・データモデル・カテゴリ体系） |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | 現行実装計画 |
 | [`docs/DEBUGGING_GUIDE.md`](docs/DEBUGGING_GUIDE.md) | 実機デバッグ・再現性確保の手順 |
-| [`docs/EXTERNAL_SETUP.md`](docs/EXTERNAL_SETUP.md) | Gemini API の外部サービス設定 |
+| [`docs/EXTERNAL_SETUP.md`](docs/EXTERNAL_SETUP.md) | Gemini API・Firebase App Distribution の外部サービス設定 |
 | [`docs/plans/`](docs/plans/) | フェーズ別詳細計画（オンボーディング・バックアップ・複数API・予算/通知） |
 | [`docs/daily/`](docs/daily/) | 開発日報 |
 | [`docs/archive/`](docs/archive/) | 旧版実装計画 |
@@ -150,7 +150,7 @@ APIキーは複数スロットを優先順に試し、レート制限や一時�
 
 ## 開発状況・ロードマップ
 
-Phase 11 まで、および実利用フィードバックに基づく UI/UX ブラッシュアップ・検索機能・オフライン対応の穴埋めまで `main` にマージ済みです。詳細は [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) を参照してください。
+Phase 11 まで、および実利用フィードバックに基づく UI/UX ブラッシュアップ・検索機能・オフライン対応・レシート日付誤読修正まで `main` にマージ済みです。詳細は [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) を参照してください。
 
 - [x] **Phase 6–8** — 実利用フィードバック対応、オンボーディング、バックアップ、品質改善
 - [x] **Phase 9** — 必須度ポリシーのプリセット・補正学習・再スコア
@@ -159,10 +159,13 @@ Phase 11 まで、および実利用フィードバックに基づく UI/UX ブ�
 - [x] **UI/UX ブラッシュアップ** — 通知設定の統合、予算集計対象の削除、APIキー自動疎通確認（2026-07-27）
 - [x] **検索機能** — 一覧タブの店名/商品名検索（全期間対象、2026-07-27）
 - [x] **オフライン対応の穴埋め** — 長期未処理レシートの画像保護・7日超スタック検出（2026-07-27）
+- [x] **レシート日付誤読修正** — AI誤読(年ズレ)修正、日付表記の汎用対応、端末保存時刻との突き合わせによる機械的な異常検知（2026-08-16）
+- [x] **開発運用の強化** — Gemini モデルを `gemini-3.6-flash` へ更新、push時にFirebase App Distributionへ自動配布するCI、個人情報コミット防止ガードレールを追加（2026-08-16）
 
 ### 次の改善候補
 
 - [ ] プロンプト継続チューニング（実利用並行）
+- [ ] 解析キューが稀に滞留する事象の原因調査（実利用モニタリング中）
 
 ### 将来検討
 

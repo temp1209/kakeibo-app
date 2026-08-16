@@ -24,6 +24,7 @@
 |------|------|------|
 | ✅ | Phase 1〜11・UI/UXブラッシュアップ・検索・オフライン対応 | 全て `main` マージ済み |
 | ✅ | レシート日付誤読修正・Geminiモデル更新(gemini-3.6-flash)・配布CI・PIIガードレール | PR #14 マージ済み（2026-08-16） |
+| ✅ | Firebase App Distribution 外部セットアップ | 完了（2026-08-16、下記） |
 | 🔍 | 解析キューの滞留（体感50%返ってこない） | 調査中・様子見。`KNOWN_ISSUES.md` §5 |
 | — | 5.1 プロンプトチューニング等の将来項目 | 保留（滞留問題が優先） |
 
@@ -31,9 +32,20 @@
 
 - AI誤読(年ズレ)修正、日付表記の汎用対応、端末保存時刻との突き合わせによる機械的な異常検知の保険（`GeminiStrictParser.detectDateAnomaly`）
 - Geminiモデル名を `gemini-2.5-flash` → `gemini-3.6-flash` に更新（旧モデルが新規APIキーで404を返すようになったため。3.6はGA・画像入力対応をWeb検索で確認済み）
-- push時にFirebase App Distributionへ自動配布するCI（`.github/workflows/distribute.yml`）を追加。ただし `FIREBASE_APP_ID` / `FIREBASE_SERVICE_ACCOUNT_JSON` の GitHub Secrets が未設定のため、現状 `distribute` ジョブは失敗する（必須チェックではないためマージはブロックされない）。配布を有効化する場合はこの2つのSecretsを設定すること
+- push時にFirebase App Distributionへ自動配布するCI（`.github/workflows/distribute.yml`）を追加。GitHub Secrets（`FIREBASE_APP_ID` / `FIREBASE_SERVICE_ACCOUNT_JSON`）の登録と外部セットアップは2026-08-16に完了、動作確認済み（下記「Firebase App Distribution 外部セットアップ」）
 - 個人情報のコミットを防ぐガードレール: `CLAUDE.md` にルールを明文化、`scripts/check-no-pii.sh`、CI（`.github/workflows/pii-check.yml`）
 - 関連コード: `GeminiStrictParser.kt`, `GeminiAiProvider.kt`, `GeminiClient.kt`, `ReceiptAnalysisPrompt.kt`
+
+### Firebase App Distribution 外部セットアップ（2026-08-16・完了）
+
+`.github/workflows/distribute.yml`（PR #14でmainにマージ済み）を実際に動かすための外部設定が完了し、テストpushで `distribute` ジョブの成功を確認済み。
+
+- Firebaseプロジェクト作成・Androidアプリ登録（パッケージ名 `work.temp1209.kakeibo`）・App Distribution有効化・テスターグループ「self」作成
+- サービスアカウントに「Firebaseアプリ配布管理者」（`roles/firebaseappdistro.admin`）ロールを付与しJSONキーを発行
+- GitHub Secrets（`FIREBASE_APP_ID` / `FIREBASE_SERVICE_ACCOUNT_JSON`）に登録
+- **ハマった点**: kakeibo-app用のFirebase/GCPプロジェクトが2つ存在していた（`kakeibo-app-dev`＝過去のDrive連携等で作成された古い未使用プロジェクト、と現行プロジェクト）。サービスアカウントを誤って古い方に作成してしまい、`distribute` ジョブが403エラーで失敗。現行プロジェクト側で作り直して解決。**今後Firebase/GCP Consoleを操作する際は、必ず現行プロジェクトが選択されていることを確認すること**（`kakeibo-app-dev` には触らない）
+- 未確認: Pixel 8aでの実機受信（Firebase App Testerアプリでの通知・インストール確認）はユーザー側の作業として残っている可能性あり
+- 詳細手順: `docs/EXTERNAL_SETUP.md` §5
 
 ### 解析キューの滞留（2026-08-16・調査中）
 
