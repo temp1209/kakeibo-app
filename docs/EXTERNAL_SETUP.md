@@ -61,7 +61,7 @@ push のたびに debug APK をビルドし、Firebase App Distribution 経由�
   - `FIREBASE_SERVICE_ACCOUNT_JSON`: ダウンロードしたサービスアカウントJSONの中身をそのまま貼り付け
   - `FIREBASE_APP_ID`: 上記で確認したアプリID
 - [ ] **Pixel 8aに「Firebase App Tester」アプリをインストール**し、テスターに登録したGoogleアカウントでログイン
-- [x] **動作確認**: 何かpushしてGitHub Actionsの `distribute` ジョブが成功することを確認（2026-08-16 確認済み） → Pixel 8aに通知が来るかは未確認
+- [x] **動作確認**: 何かpushしてGitHub Actionsの `distribute` ジョブが成功することを確認 → Pixel 8aへの通知・インストール、debug署名鍵固定後の2回目更新でデータが保持されることまで確認済み（2026-08-16）
 
 ### 運用メモ
 
