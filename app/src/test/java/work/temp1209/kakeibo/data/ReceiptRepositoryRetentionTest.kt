@@ -79,3 +79,51 @@ class QueueEntryStaleTest {
         assertFalse(isQueueEntryStale("QUEUED", queuedAt, now, staleAfter))
     }
 }
+
+/**
+ * 解析キュー滞留対策: RUNNINGのまま長時間放置された「孤児」キューの検出（[isRunningEntryOrphaned]）の検証。
+ * WorkManagerの実行時間上限などでWorkerが結果書き込み前に強制終了されると、RUNNINGのまま
+ * 二度と処理されず（[isQueueEntryStale] の7日ルールまで気づけず）固まってしまうため、
+ * もっと短い周期でQUEUEDへ戻して再試行させる。
+ */
+class RunningEntryOrphanedTest {
+
+    private val now = Instant.parse("2026-08-16T00:00:00Z")
+    private val orphanAfter = Duration.ofMinutes(15)
+
+    @Test
+    fun running_within_threshold_is_not_orphaned() {
+        val startedAt = now.minus(Duration.ofMinutes(5))
+        assertFalse(isRunningEntryOrphaned("RUNNING", startedAt, now, orphanAfter))
+    }
+
+    @Test
+    fun running_past_threshold_is_orphaned() {
+        val startedAt = now.minus(Duration.ofMinutes(20))
+        assertTrue(isRunningEntryOrphaned("RUNNING", startedAt, now, orphanAfter))
+    }
+
+    @Test
+    fun queued_is_never_orphaned_regardless_of_age() {
+        val startedAt = now.minus(Duration.ofDays(1))
+        assertFalse(isRunningEntryOrphaned("QUEUED", startedAt, now, orphanAfter))
+    }
+
+    @Test
+    fun running_without_startedAt_is_not_orphaned() {
+        assertFalse(isRunningEntryOrphaned("RUNNING", null, now, orphanAfter))
+    }
+
+    @Test
+    fun done_or_failed_is_never_orphaned_regardless_of_age() {
+        val startedAt = now.minus(Duration.ofDays(1))
+        assertFalse(isRunningEntryOrphaned("DONE", startedAt, now, orphanAfter))
+        assertFalse(isRunningEntryOrphaned("FAILED", startedAt, now, orphanAfter))
+    }
+
+    @Test
+    fun exactly_at_threshold_is_not_yet_orphaned() {
+        val startedAt = now.minus(orphanAfter)
+        assertFalse(isRunningEntryOrphaned("RUNNING", startedAt, now, orphanAfter))
+    }
+}

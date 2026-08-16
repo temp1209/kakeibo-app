@@ -20,6 +20,7 @@ import work.temp1209.kakeibo.data.prefs.NecessityPolicyStore
 import work.temp1209.kakeibo.data.prefs.NotificationPrefs
 import work.temp1209.kakeibo.data.prompt.ReceiptAnalysisPrompt
 import work.temp1209.kakeibo.data.db.AppDatabase
+import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.notifications.NotificationHistory
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
 import java.time.Instant
@@ -35,6 +36,11 @@ class AnalysisWorker(
         val dao = AppDatabase.get(applicationContext).receiptDao()
         val providerStore = AiProviderStore(applicationContext)
         val router = AiRequestRouter(providerStore)
+
+        val recovered = ReceiptRepository(applicationContext).recoverOrphanedRunningEntries()
+        if (recovered > 0) {
+            Log.w(TAG, "recovered orphaned RUNNING entries count=$recovered")
+        }
 
         Log.d(TAG, "doWork start")
         while (true) {

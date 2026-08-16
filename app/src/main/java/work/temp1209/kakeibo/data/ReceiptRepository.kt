@@ -54,6 +54,15 @@ fun isImageCleanupEligible(analysisStatus: String?): Boolean =
 fun isQueueEntryStale(status: String, queuedAt: Instant, now: Instant, staleAfter: Duration): Boolean =
     (status == "QUEUED" || status == "RUNNING") && queuedAt.isBefore(now.minus(staleAfter))
 
+/**
+ * RUNNING のまま [orphanAfter] 以上経過したキューは、WorkManagerの実行時間上限などで
+ * Worker が結果を書き込む前に強制終了された「孤児」の可能性が高いとみなす。
+ * [getNextQueuedOrNull] は QUEUED のみを対象とするため、RUNNING のまま放置すると
+ * 次回以降二度と処理されず、エラーも残らないまま永久に固まってしまう。
+ */
+fun isRunningEntryOrphaned(status: String, startedAt: Instant?, now: Instant, orphanAfter: Duration): Boolean =
+    status == "RUNNING" && startedAt != null && startedAt.isBefore(now.minus(orphanAfter))
+
 class ReceiptRepository(private val context: Context) {
     private val dao = AppDatabase.get(context).receiptDao()
 
@@ -534,6 +543,37 @@ class ReceiptRepository(private val context: Context) {
             failedCount++
         }
         failedCount
+    }
+
+    /**
+     * RUNNING のまま [orphanAfter] 以上経過した孤児キューを QUEUED へ戻し、再試行対象にする。
+     * [failStaleQueueEntries]（7日）よりずっと短い周期で回すことで、WorkManagerの実行時間上限による
+     * 強制終了で「エラーも残らず永久に固まる」症状を早期に自己修復する。attemptCount が
+     * [maxAttempts] に達したものは無限リトライを避けるため対象外にする（最終的には
+     * [failStaleQueueEntries] の7日ルールで解析失敗に確定する）。
+     */
+    suspend fun recoverOrphanedRunningEntries(
+        now: Instant = Instant.now(),
+        orphanAfter: Duration = Duration.ofMinutes(15),
+        maxAttempts: Int = 5,
+    ): Int = withContext(Dispatchers.IO) {
+        val orphaned = dao.listInFlightQueueEntries().filter { entry ->
+            entry.attemptCount < maxAttempts &&
+                isRunningEntryOrphaned(
+                    status = entry.status,
+                    startedAt = entry.startedAt?.let(Instant::parse),
+                    now = now,
+                    orphanAfter = orphanAfter,
+                )
+        }
+        for (entry in orphaned) {
+            dao.requeue(
+                queueId = entry.queueId,
+                attemptCount = entry.attemptCount + 1,
+                lastError = "解析処理が中断された可能性があるため再試行します",
+            )
+        }
+        orphaned.size
     }
 
     /**
