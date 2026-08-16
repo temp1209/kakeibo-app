@@ -2,6 +2,38 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 個人情報をコミットしない（最重要・例外なし）
+
+このリポジトリは **ポートフォリオとして公開するパブリックリポジトリ** である
+（`docs/PLAY_STORE_PUBLICATION_DECISION.md` 参照）。次を **絶対に** コミット対象
+ファイル（コード・コメント・ドキュメント・コミットメッセージ・CI設定など、
+git track されるものすべて）に書かない。
+
+- 実在するメールアドレス（例: セッションのシステムコンテキストに含まれる `userEmail` など）
+- 氏名（漢字・ローマ字問わず）、電話番号、住所などの個人を特定できる情報
+- 上記が「例として分かりやすいから」であっても書かない。プレースホルダー
+  （`<your-email>` `<YOUR_NAME>` など）を使うこと
+
+**背景**: 過去に Firebase 設定手順のドキュメントへ、セッションの `userEmail`
+コンテキストをそのまま「わかりやすい具体例」として書いてコミット・pushしてしまい、
+公開リポジトリに個人情報が露出した事故があった（後に該当コミットを amend + force-push
+して履歴から削除して対処済み）。原因は「会話で話してよい情報」と「gitに永続的に残る
+公開ファイルに書いてよい情報」を区別できていなかったこと。
+
+### 実行すること
+
+- 何かをコミットする前に、変更対象ファイルに個人情報が含まれていないか自分の目で確認する。
+- 迷ったら次を実行し、`NG` が出ないことを確認してからコミットする:
+
+  ```bash
+  ./scripts/check-no-pii.sh
+  ```
+
+  このスクリプトは汎用的なメールアドレスのパターンを機械的に検出する（追加で氏名等を
+  検出したい場合は環境変数 `PII_DENYLIST_TERMS` を使うが、実際の値はリポジトリに
+  書かない）。CI（`.github/workflows/pii-check.yml`）でも push/PR のたびに同じ
+  チェックが自動で走るが、それに頼らずコミット前に自分でも確認すること。
+
 ## プロジェクト概要
 
 **kakeibo-app** は「レシートを撮るだけで家計簿が完成する」Android向け個人用家計簿アプリ。Kotlin + Jetpack Compose で構築し、レシート撮影 → Gemini API によるマルチモーダル解析 → 構造化データ自動登録、という体験にUXを振り切っている。サーバーレス構成で、Androidアプリから Gemini REST API を直接呼び出す（バックエンドは存在しない）。
@@ -29,7 +61,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew connectedAndroidTest
 ```
 
-CI（`.github/workflows/android.yml`）は PR / `main` push で `test` → `lint` → `assembleDebug` を実行する。ローカルで変更を確認する際もこの3つを通す。
+CI（`.github/workflows/android.yml`）は PR / `main` push で `test` → `lint` → `assembleDebug` を実行する。ローカルで変更を確認する際もこの3つを通す。`.github/workflows/pii-check.yml` は個人情報検出、`.github/workflows/distribute.yml` は push時のFirebase App Distribution配布を行う。
 
 Kotlin単体テストは `app/src/test/java/work/temp1209/kakeibo/` 配下（JVM実行、`android.util.Log` はモックされないため、Log呼び出しは `runCatching` で握りつぶす実装パターンが使われている: `AiRequestRouter.logD/logW` 参照）。
 
@@ -58,7 +90,7 @@ Kotlin単体テストは `app/src/test/java/work/temp1209/kakeibo/` 配下（JVM
   → OS通知 + 一覧/分析タブへ反映
 ```
 
-`AnalysisWorker`（`data/analysis/AnalysisWorker.kt`）がこのフローの中心。`analysis_queue` テーブルをポーリングし1件ずつ順次処理する（PENDING/RUNNING/DONE/FAILED/NEEDS_REVIEW の状態遷移）。API未設定・レシート不在(`NO_RECEIPT`)・その他例外はそれぞれ専用のハンドラでFAILED確定し、ユーザー向けメッセージと通知履歴を残す。
+`AnalysisWorker`（`data/analysis/AnalysisWorker.kt`）がこのフローの中心。`analysis_queue` テーブルをポーリングし1件ずつ順次処理する（PENDING/RUNNING/DONE/FAILED/NEEDS_REVIEW の状態遷移）。API未設定・レシート不在(`NO_RECEIPT`)・その他例外はそれぞれ専用のハンドラでFAILED確定し、ユーザー向けメッセージと通知履歴を残す。キュー投入は `WorkManager.enqueueUniqueWork(..., ExistingWorkPolicy.KEEP, ...)`（`NetworkType.CONNECTED` 制約付き）。投入から7日超のQUEUED/RUNNINGはアプリ起動時に `failStaleQueueEntries()` で強制失敗させる保険がある（`ReceiptRepository.kt`）。
 
 ### AIプロバイダ層（`data/ai/`）
 
@@ -74,10 +106,11 @@ Kotlin単体テストは `app/src/test/java/work/temp1209/kakeibo/` 配下（JVM
 
 ### Gemini解析（`data/gemini/`, `data/analysis/`, `data/prompt/`）
 
+- 使用モデル: `gemini-3.6-flash`（`GeminiAiProvider.MODEL_NAME` / `GeminiClient.MODEL`）。旧 `gemini-2.5-flash` は新規APIキーで404になったため移行済み
 - `ReceiptJsonSchema.schemaV1()` … Gemini `responseJsonSchema` に渡す厳格スキーマ定義
 - `ReceiptAnalysisPrompt.buildFromStore(...)` … プロンプト本文を構築。必須度ポリシー（`data/necessity/`, `data/prompt/necessity/`）をプロンプトに埋め込む
 - `GeminiResponseParser` … Gemini REST レスポンスからテキストを抽出
-- `GeminiStrictParser` … 抽出したJSON文字列をドメインモデル（`ReceiptItem` 等）にパース。`[NO_RECEIPT]` はレシート非検出として専用例外 `NoReceiptInImageException` を投げる
+- `GeminiStrictParser` … 抽出したJSON文字列をドメインモデル（`ReceiptItem` 等）にパース。`[NO_RECEIPT]` はレシート非検出として専用例外 `NoReceiptInImageException` を投げる。`reviewFlags()` は端末保存時刻(`capturedAt`)とAI抽出日時を突き合わせ、未来日付や60日超の乖離があれば `needsReview` を機械的に立てる（AIの誤読自己申告に頼らない保険）
 - 生のGemini JSONは `GeminiResultEntity` に必ず保存する（再現性確保のため。`docs/DEBUGGING_GUIDE.md` 参照）
 
 ### 必須度スコア（necessity）
