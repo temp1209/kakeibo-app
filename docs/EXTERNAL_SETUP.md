@@ -66,6 +66,11 @@ push のたびに debug APK をビルドし、Firebase App Distribution 経由�
 ### 運用メモ
 
 - 配布されるのは常に **debugビルド**（署名鍵の管理が不要で、今の「自分専用サイドロード」方針と合う）。Play Store 提出用のreleaseビルド署名は別途検討（`docs/PLAY_STORE_PUBLICATION_DECISION.md` 参照）。
+- **debug署名鍵をCI/ローカルで固定している**（`app/build.gradle.kts` の `signingConfigs.debug` が `app/debug.keystore` を明示参照）。CIランナーは実行のたびに使い捨てで `~/.android/debug.keystore` を毎回自動生成するため、これを指定しないとビルドごとに異なる鍵で署名され、Androidが「別アプリ」とみなしてアップデートではなく**アンインストール→再インストール扱いになりデータが全消去される**（2026-08-16に実利用で発覚、修正済み）
+  - `app/debug.keystore` は**このプロジェクト専用に新規生成した鍵**（`keytool -genkeypair`）で、開発機で他プロジェクトと共有しているデフォルト鍵は使わない
+  - 秘密鍵の実体を公開リポジトリに置くと、同じ鍵で署名した偽装APKを「正規のアップデート」としてインストールされてしまうリスクがあるため、**`app/debug.keystore` はコミットせず（`.gitignore`で除外）、GitHub Secrets `DEBUG_KEYSTORE_BASE64` に登録**し、CI実行時にのみ復元する（`.github/workflows/distribute.yml` の「Restore debug keystore」ステップ）
+  - Secrets登録コマンド: `[System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("app/debug.keystore")) | gh secret set DEBUG_KEYSTORE_BASE64 --repo temp1209/kakeibo-app`（PowerShell）
+  - ローカル開発機では `app/debug.keystore` を一度生成すればそのまま使い続けられる（コミットされないため、リポジトリを新しい端末にcloneした場合は改めて生成が必要）
 - `versionCode` はCI実行ごとに `github.run_number` で上書きされる（`app/build.gradle.kts` の `versionCodeOverride` プロジェクトプロパティ）。ローカルの `./gradlew assembleDebug` では従来どおり `versionCode = 1` のまま。
 - トリガーは全ブランチへの push（`.github/workflows/distribute.yml`）。作業ブランチへpushした時点で配布されるので、mainへのマージを待つ必要はない。
 
