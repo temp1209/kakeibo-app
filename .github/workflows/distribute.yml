@@ -40,6 +40,12 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x ./gradlew
 
+      - name: Restore debug keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > app/debug.keystore
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --no-daemon -PversionCodeOverride=${{ github.run_number }}
 

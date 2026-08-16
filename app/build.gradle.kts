@@ -20,7 +20,23 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // ローカル(Android Studio)とCI(GitHub Actions)で同じdebug鍵を使うために、
+            // AGPが自動生成する ~/.android/debug.keystore ではなく固定のキーストアを明示的に指定する。
+            // CIランナーはビルドのたびに使い捨てのため、これを指定しないと毎回異なる鍵で署名され、
+            // Firebase App Distributionでの更新が「別アプリ」扱いとなりデータが全消去されてしまう。
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
