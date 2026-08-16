@@ -48,19 +48,20 @@ push のたびに debug APK をビルドし、Firebase App Distribution 経由�
 完全な無音更新は Android の仕組み上不可能（root/EMM登録なしでは）なため、
 「通知→ワンタップでインストール」までが現実的な最終形。
 
-- [ ] **Firebaseプロジェクトを作成**（<https://console.firebase.google.com/> 、無料のSparkプランで可）
-- [ ] **Androidアプリを登録**（パッケージ名 `work.temp1209.kakeibo`。google-services.json は今回不要、登録のみでOK）
-- [ ] **App Distributionを有効化**（Firebaseコンソール左メニュー → Release & Monitor → App Distribution）
-- [ ] **テスターグループ「self」を作成**し、自分のGoogleアカウントのメールアドレスを追加（このファイルには書かない。パスワードマネージャ等で管理）
-- [ ] **サービスアカウントを作成**（Google Cloud Console → IAM と管理 → サービスアカウント、対象はFirebaseプロジェクトと同じGCPプロジェクト）
-  - ロールは「Firebase App Distribution Admin」（無ければ「編集者」）を付与
+- [x] **Firebaseプロジェクトを作成**（<https://console.firebase.google.com/> 、無料のSparkプランで可）
+- [x] **Androidアプリを登録**（パッケージ名 `work.temp1209.kakeibo`。google-services.json は今回不要、登録のみでOK）
+- [x] **App Distributionを有効化**（Firebaseコンソール左メニュー → Release & Monitor → App Distribution）
+- [x] **テスターグループ「self」を作成**し、自分のGoogleアカウントのメールアドレスを追加（このファイルには書かない。パスワードマネージャ等で管理）
+- [x] **サービスアカウントを作成**（Google Cloud Console → IAM と管理 → サービスアカウント、対象はFirebaseプロジェクトと同じGCPプロジェクト）
+  - ロールは「Firebase App Distribution Admin」を付与。GCP Consoleの日本語UIでは「Firebase」で検索してもロールが出てこないことがあるため、見つからない場合は「App Distribution」で検索するか、先に「Firebase App Distribution API」をAPIライブラリで有効化してから探す（「編集者」はプロジェクト内のほぼ全リソースに触れる過剰な権限なので極力避ける）
   - JSONキーを発行してダウンロード
-- [ ] **Firebaseコンソールで「アプリID」を確認**（プロジェクトの設定 → 全般 → 登録したAndroidアプリの「アプリID」。`1:xxxxxxxx:android:xxxxxxxx` の形式）
-- [ ] **GitHubリポジトリにSecretsを登録**（Settings → Secrets and variables → Actions）
+  - ⚠️ **同じGoogleアカウントに複数のFirebase/GCPプロジェクトがある場合、操作対象のプロジェクトを取り違えやすい**（Firebaseで新規プロジェクトを作るたびに裏でGCPプロジェクトが新規作成されるため）。作業前に必ずGCP Console上部のプロジェクト選択で対象を確認すること。取り違えると `distribute` ジョブが `HTTP 403 The caller does not have permission` で失敗する
+- [x] **Firebaseコンソールで「アプリID」を確認**（プロジェクトの設定 → 全般 → 登録したAndroidアプリの「アプリID」。`1:xxxxxxxx:android:xxxxxxxx` の形式）
+- [x] **GitHubリポジトリにSecretsを登録**（Settings → Secrets and variables → Actions、または `gh secret set` コマンド）
   - `FIREBASE_SERVICE_ACCOUNT_JSON`: ダウンロードしたサービスアカウントJSONの中身をそのまま貼り付け
   - `FIREBASE_APP_ID`: 上記で確認したアプリID
 - [ ] **Pixel 8aに「Firebase App Tester」アプリをインストール**し、テスターに登録したGoogleアカウントでログイン
-- [ ] **動作確認**: 何かpushしてGitHub Actionsの `distribute` ジョブが成功することを確認 → Pixel 8aに通知が来るか確認
+- [x] **動作確認**: 何かpushしてGitHub Actionsの `distribute` ジョブが成功することを確認（2026-08-16 確認済み） → Pixel 8aに通知が来るかは未確認
 
 ### 運用メモ
 
