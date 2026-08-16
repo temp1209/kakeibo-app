@@ -158,8 +158,12 @@ private fun AppNav(
     var cameraPreviewSuppressed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        val recovered = repo.recoverOrphanedRunningEntries()
         repo.failStaleQueueEntries()
         repo.cleanupExpiredImages()
+        if (recovered > 0) {
+            repo.scheduleAnalysisWork()
+        }
     }
 
     LaunchedEffect(deepLinkReceiptId) {
