@@ -33,6 +33,6 @@ class GeminiAiProvider(
     )
 
     companion object {
-        const val MODEL_NAME = "gemini-2.5-flash"
+        const val MODEL_NAME = "gemini-3.6-flash"
     }
 }

@@ -40,7 +40,35 @@
 - [ ] Gemini **APIキー**（入力用）
 - [ ] Pixel 8a が **ワイヤレスでadb接続**できる
 
-## 5) トラブルシューティング
+## 5) Firebase App Distribution（push→自動配布）
+
+出先で Claude Code から push した後、Android Studio を開かなくても Pixel 8a 側に更新通知が来て
+ワンタップでインストールできるようにするための設定。`.github/workflows/distribute.yml` が
+push のたびに debug APK をビルドし、Firebase App Distribution 経由でテスター（自分）に配布する。
+完全な無音更新は Android の仕組み上不可能（root/EMM登録なしでは）なため、
+「通知→ワンタップでインストール」までが現実的な最終形。
+
+- [ ] **Firebaseプロジェクトを作成**（<https://console.firebase.google.com/> 、無料のSparkプランで可）
+- [ ] **Androidアプリを登録**（パッケージ名 `work.temp1209.kakeibo`。google-services.json は今回不要、登録のみでOK）
+- [ ] **App Distributionを有効化**（Firebaseコンソール左メニュー → Release & Monitor → App Distribution）
+- [ ] **テスターグループ「self」を作成**し、自分のGoogleアカウントのメールアドレスを追加（このファイルには書かない。パスワードマネージャ等で管理）
+- [ ] **サービスアカウントを作成**（Google Cloud Console → IAM と管理 → サービスアカウント、対象はFirebaseプロジェクトと同じGCPプロジェクト）
+  - ロールは「Firebase App Distribution Admin」（無ければ「編集者」）を付与
+  - JSONキーを発行してダウンロード
+- [ ] **Firebaseコンソールで「アプリID」を確認**（プロジェクトの設定 → 全般 → 登録したAndroidアプリの「アプリID」。`1:xxxxxxxx:android:xxxxxxxx` の形式）
+- [ ] **GitHubリポジトリにSecretsを登録**（Settings → Secrets and variables → Actions）
+  - `FIREBASE_SERVICE_ACCOUNT_JSON`: ダウンロードしたサービスアカウントJSONの中身をそのまま貼り付け
+  - `FIREBASE_APP_ID`: 上記で確認したアプリID
+- [ ] **Pixel 8aに「Firebase App Tester」アプリをインストール**し、テスターに登録したGoogleアカウントでログイン
+- [ ] **動作確認**: 何かpushしてGitHub Actionsの `distribute` ジョブが成功することを確認 → Pixel 8aに通知が来るか確認
+
+### 運用メモ
+
+- 配布されるのは常に **debugビルド**（署名鍵の管理が不要で、今の「自分専用サイドロード」方針と合う）。Play Store 提出用のreleaseビルド署名は別途検討（`docs/PLAY_STORE_PUBLICATION_DECISION.md` 参照）。
+- `versionCode` はCI実行ごとに `github.run_number` で上書きされる（`app/build.gradle.kts` の `versionCodeOverride` プロジェクトプロパティ）。ローカルの `./gradlew assembleDebug` では従来どおり `versionCode = 1` のまま。
+- トリガーは全ブランチへの push（`.github/workflows/distribute.yml`）。作業ブランチへpushした時点で配布されるので、mainへのマージを待つ必要はない。
+
+## 6) トラブルシューティング
 
 ### Gemini API キー未設定でレシート送信
 

@@ -69,7 +69,9 @@ object ReceiptJsonSchema {
                             .put("type", "string")
                             .put(
                                 "description",
-                                "ISO 8601、日本時刻想定で末尾+09:00（例 2024-05-01T14:30:00+09:00）。時刻不明なら同日T00:00:00+09:00。",
+                                "ISO 8601、日本時刻想定で末尾+09:00（形式 YYYY-MM-DDTHH:mm:ss+09:00）。" +
+                                    "YYYYはレシート印字の実際の西暦4桁をそのまま使い、学習データ上よくある年に丸めない。" +
+                                    "6桁のYYMMDD表記（例260804→2026-08-04）は西暦下2桁であり元号年ではない。時刻不明なら同日T00:00:00+09:00。",
                             ),
                     )
                     .put("capturedAt", JSONObject().put("type", "string"))

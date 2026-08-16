@@ -7,6 +7,9 @@ import work.temp1209.kakeibo.data.analysis.model.GeminiReceiptResponse
 import work.temp1209.kakeibo.data.analysis.model.ReceiptHeader
 import work.temp1209.kakeibo.data.analysis.model.ReceiptItem
 import work.temp1209.kakeibo.data.analysis.model.ReviewFlags
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 /** モデルが `warnings` に `NO_RECEIPT` / `[NO_RECEIPT]` を含めたときに送出し、解析を失敗扱いにする。 */
 class NoReceiptInImageException(
@@ -69,13 +72,20 @@ object GeminiStrictParser {
                 warning.contains("NO_RECEIPT", ignoreCase = true)
         }
 
-    fun reviewFlags(response: GeminiReceiptResponse, confidenceThreshold: Double = 0.7): ReviewFlags {
+    fun reviewFlags(
+        response: GeminiReceiptResponse,
+        confidenceThreshold: Double = 0.7,
+        /** レシート保存（撮影・送信）時点の実時刻。AI由来ではなく端末時計から取得した値を渡す。 */
+        savedAt: String? = null,
+    ): ReviewFlags {
         val reasons = mutableListOf<String>()
 
         // Required (Phase2): receiptDatetime/merchantName/totalAmountYen must exist by parsing contract.
         if (response.receipt.merchantName.isBlank()) reasons += "merchantName missing"
         if (response.receipt.receiptDatetime.isBlank()) reasons += "receiptDatetime missing"
         if (response.receipt.totalAmountYen < 0) reasons += "totalAmountYen invalid"
+
+        detectDateAnomaly(response.receipt.receiptDatetime, savedAt)?.let { reasons += it }
 
         val lowConfCount = response.items.count { it.confidence < confidenceThreshold }
         if (lowConfCount > 0) reasons += "low confidence items: $lowConfCount"
@@ -103,5 +113,33 @@ object GeminiStrictParser {
         (0 until length()).mapNotNull { idx ->
             optString(idx).takeIf { it.isNotBlank() }
         }
+
+    private val JST: ZoneId = ZoneId.of("Asia/Tokyo")
+
+    /**
+     * AIが読み取った年を誤認識していないかの保険。AI自身の申告(warnings)に頼らず、
+     * 端末が記録したレシート保存時刻(savedAt)と突き合わせて機械的に検出する。
+     * 会計日が保存時刻より未来、または2ヶ月(60日)より前に離れている場合は要確認とする。
+     */
+    private fun detectDateAnomaly(receiptDatetime: String, savedAt: String?): String? {
+        if (savedAt.isNullOrBlank()) return null
+        val receiptDate = parseToJstDate(receiptDatetime) ?: return null
+        val savedDate = parseToJstDate(savedAt) ?: return null
+
+        val daysReceiptBeforeSaved = ChronoUnit.DAYS.between(receiptDate, savedDate)
+        return when {
+            daysReceiptBeforeSaved < 0 ->
+                "receiptDatetime is in the future relative to saved time (by ${-daysReceiptBeforeSaved} day(s))"
+            daysReceiptBeforeSaved > STALE_RECEIPT_DAYS ->
+                "receiptDatetime is $daysReceiptBeforeSaved day(s) before saved time (possible date/year misread)"
+            else -> null
+        }
+    }
+
+    private fun parseToJstDate(iso: String) = runCatching {
+        OffsetDateTime.parse(iso).atZoneSameInstant(JST).toLocalDate()
+    }.getOrNull()
+
+    private const val STALE_RECEIPT_DAYS = 60L
 }
 

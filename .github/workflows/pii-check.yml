@@ -1,0 +1,21 @@
+name: PII Check
+
+# 公開リポジトリのため、個人情報(メールアドレス・氏名など)がコミットされていないかを
+# push/PRのたびに検査する。scripts/check-no-pii.sh を参照。
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run PII check
+        env:
+          PII_DENYLIST_TERMS: ${{ secrets.PII_DENYLIST_TERMS }}
+        run: |
+          chmod +x ./scripts/check-no-pii.sh
+          ./scripts/check-no-pii.sh
