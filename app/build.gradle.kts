@@ -26,10 +26,17 @@ android {
             // AGPが自動生成する ~/.android/debug.keystore ではなく固定のキーストアを明示的に指定する。
             // CIランナーはビルドのたびに使い捨てのため、これを指定しないと毎回異なる鍵で署名され、
             // Firebase App Distributionでの更新が「別アプリ」扱いとなりデータが全消去されてしまう。
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            // 固定鍵は.gitignoreで除外され、Firebase配布CI(distribute.yml)がGitHub Secretsから
+            // 復元する。それ以外のCI(android.yml、Firebase配布とは無関係)ではファイルが無いため、
+            // AGP既定の自動生成debug署名にフォールバックする(このCIはただの検証用でFirebaseへ
+            // 配布しないため、署名の一貫性は不要)。
+            val pinnedDebugKeystore = file("debug.keystore")
+            if (pinnedDebugKeystore.exists()) {
+                storeFile = pinnedDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
