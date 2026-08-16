@@ -3,7 +3,7 @@
 実機利用や開発中に気づいた、**未対応または要件に未明文化**の項目を集約する。  
 実装タスクの詳細は [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) を参照。
 
-最終更新: 2026-07-11
+最終更新: 2026-08-16
 
 ---
 
@@ -70,6 +70,40 @@ Drive 自動バックアップは手動 JSON バックアップに置き換え�
 | **詳細** | [`plans/onboarding.md`](plans/onboarding.md) **§13** |
 
 優先度の高いもの（M1/M2）は **Phase 8.3** で着手予定。詳細: [`plans/phase-8-polish.md`](plans/phase-8-polish.md)
+
+---
+
+## 5. 解析キューが滞留し、レシート解析が返ってこないことがある
+
+| 項目 | 内容 |
+|------|------|
+| **状態** | 🔍 調査中・様子見（2026-08-16 発見） |
+| **発見** | 2026-08-16 実利用（レシート送信後、体感半分ほどが「解析待ち」のまま返ってこない。`analysis_queue` に約10件滞留） |
+
+### 症状
+
+- レシートを送信しても解析が完了せず、一覧上で「解析待ち」（PENDING/RUNNING）のまま止まる
+- `FAILED`・`NEEDS_REVIEW` の通知が来ているわけではなく、静かに滞留する
+
+### 調査で分かったこと（コードレビューベース、実機ログ未採取）
+
+- `AnalysisWorker.doWork()` はキューを `while` ループで全件処理し、API 呼び出し失敗時は例外を捕捉して確実に `FAILED` にする実装になっている（[`AnalysisWorker.kt`](../app/src/main/java/work/temp1209/kakeibo/data/analysis/AnalysisWorker.kt)）。`GeminiClient` にも `callTimeout(180s)` 等が設定済みで、API呼び出し自体が無限にハングすることは考えにくい
+- そのため「エラーにもならず滞留する」原因は、解析処理そのものより **`WorkManager` へのジョブ投入・実行が滞る側**の可能性が高いと推測
+  - `scheduleAnalysisWork()` は `enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.KEEP, ...)` かつ `Constraints(NetworkType.CONNECTED)` 付き（[`ReceiptRepository.kt`](../app/src/main/java/work/temp1209/kakeibo/data/ReceiptRepository.kt)）。`KEEP` のため、既存の未完了ジョブが残っている間は新規ジョブが投入されない
+  - Android のバッテリー最適化・Doze モードにより `WorkManager` の実行自体がOS側で遅延・スキップされている可能性がある（特に端末メーカーの独自最適化が強い場合）
+  - `feat/offline-support`（PR #11）で「投入から7日超のQUEUED/RUNNINGは異常とみなし解析失敗に確定」という保険（`failStaleQueueEntries()`）は実装済みだが、しきい値が7日のため**直近数時間〜数日の短期滞留には効かない**
+- Gemini モデル名は `gemini-2.5-flash` → `gemini-3.6-flash` に更新済み（PR #14、2026-08-16マージ）。3.6-flashはGA・画像入力対応をWeb検索で確認済みのため、モデル名不正による404が原因の可能性は低いと判断（ただし404などのAPIエラーは前述の通り`FAILED`になるはずで、今回の「静かに滞留」という症状とは一致しない）
+
+### 次のアクション（未着手）
+
+- [ ] 端末の設定でアプリがバッテリー最適化の対象外になっているか確認
+- [ ] 滞留中レシートの実際のステータス（PENDING/RUNNING/FAILEDのどれか）をLogcatまたはDB直接確認で切り分け（フィルタ: `AnalysisWorker|AiRequestRouter`）
+- [ ] 上記で原因を特定できたら、必要に応じて `ExistingWorkPolicy` の見直しやユーザー向けの手動リトライ導線を検討
+
+### 関連
+
+- [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — 2026-08-16 時点でこの課題を理由に新規開発を一旦停止し、実利用しながら様子見中
+- 関連コード: `AnalysisWorker.kt`, `ReceiptRepository.kt`（`scheduleAnalysisWork`, `failStaleQueueEntries`, `isQueueEntryStale`）
 
 ---
 
