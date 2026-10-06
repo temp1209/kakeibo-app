@@ -66,6 +66,7 @@ class AiRequestRouter(
         logD("route start order=${slotsWithKeys.joinToString(" → ") { it.first.label }}")
 
         var lastError: Throwable? = null
+        val allErrors = mutableListOf<Throwable>()
         var attempts = 0
         val eligibleCount = slotsWithKeys.count { (slot, _) -> providers.containsKey(slot.providerId) }
         for ((slot, apiKey) in slotsWithKeys) {
@@ -90,6 +91,7 @@ class AiRequestRouter(
                 )
             } catch (e: Exception) {
                 lastError = e
+                allErrors += e
                 logW("failover from slot=${slot.label}: ${e.message}")
                 continue
             }
@@ -98,6 +100,7 @@ class AiRequestRouter(
         throw AllAiProvidersFailedException(
             attempts = attempts.coerceAtLeast(1),
             cause = lastError,
+            allCauses = allErrors,
         )
     }
 

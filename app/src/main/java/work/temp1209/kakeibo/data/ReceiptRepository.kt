@@ -806,9 +806,16 @@ class ReceiptRepository(private val context: Context) {
             r.inputKind != "MANUAL_NO_RECEIPT" &&
             r.analysisErrorMessage != AnalysisWorker.NO_RECEIPT_USER_MESSAGE
 
+    /**
+     * 一括再送信の対象（全期間）。画像が残っていないもの（保持期間で削除済み等）は、
+     * 再送信しても必ず失敗し、件数に残り続けてしまうので含めない。
+     */
+    private suspend fun listBulkResendTargets(): List<ReceiptEntity> =
+        dao.listReceipts().filter(::isBulkResendTarget).filter { isReceiptImageReadable(it.receiptId) }
+
     /** 一括再送信の対象件数（全期間）。 */
     suspend fun countBulkResendTargets(): Int = withContext(Dispatchers.IO) {
-        dao.listReceipts().count(::isBulkResendTarget)
+        listBulkResendTargets().size
     }
 
     /**
@@ -818,7 +825,7 @@ class ReceiptRepository(private val context: Context) {
      */
     suspend fun resendAllFailedAnalysis(): Int = withContext(Dispatchers.IO) {
         var queued = 0
-        for (r in dao.listReceipts().filter(::isBulkResendTarget)) {
+        for (r in listBulkResendTargets()) {
             if (resendAnalysis(r.receiptId) == ResendAnalysisResult.Success) queued++
         }
         Log.d(TAG, "resendAllFailedAnalysis queued=$queued")

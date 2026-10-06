@@ -70,20 +70,25 @@ object GeminiUserMessages {
 
     /**
      * 待てば直る可能性が高い失敗か（Google側の過負荷503・利用上限429・5xx・タイムアウト・通信エラー）。
-     * ルータが全スロット失敗で投げる [AllAiProvidersFailedException] の原因のみを見る。
-     * 画像読込失敗・解析結果の不正・400/401/403/404 のような再試行しても直らない失敗は false。
+     * ルータが全スロット失敗で投げる [AllAiProvidersFailedException] の、いずれかのスロットの失敗が
+     * 一時的なものなら true（片方が503でもう片方がキー不正の400、でも待てば直る可能性がある）。
+     * 画像読込失敗・解析結果の不正・400/401/403/404 のみの失敗は false。
      */
     fun isTransientFailure(throwable: Throwable): Boolean {
         val allFailed = throwable as? AllAiProvidersFailedException ?: return false
-        val root = allFailed.cause ?: return false
-        if (root is java.io.IOException) return true
-        val msg = root.message.orEmpty()
-        return isRateLimited(root) ||
-            msg.contains("timeout", ignoreCase = true) ||
-            TRANSIENT_HTTP_STATUS.containsMatchIn(msg)
+        return allFailed.allCauses.any(::isTransientCause)
     }
 
-    private val TRANSIENT_HTTP_STATUS = Regex("""HTTP (429|5\d\d)\b""")
+    private fun isTransientCause(cause: Throwable): Boolean {
+        if (cause is java.io.IOException) return true
+        val msg = cause.message.orEmpty()
+        // "HTTP <コード>: <本文>" の形ならコードだけで決める（本文に偶然「429」等の数字が入っていても影響されない）
+        val status = HTTP_STATUS.find(msg)?.groupValues?.get(1)?.toIntOrNull()
+        if (status != null) return status == 429 || status in 500..599
+        return msg.contains("timeout", ignoreCase = true) || isRateLimited(msg)
+    }
+
+    private val HTTP_STATUS = Regex("""^HTTP (\d{3})\b""")
 
     fun isRateLimited(throwable: Throwable): Boolean {
         if (isRateLimited(throwable.message.orEmpty())) return true

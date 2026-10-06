@@ -3,10 +3,13 @@ package work.temp1209.kakeibo.data.ai
 /**
  * 有効スロットがすべて失敗したとき。
  * [cause] は最後に失敗したスロットの例外（ユーザー向け詳細・レート制限判定用）。
+ * [allCauses] は全スロットの失敗（一時的な失敗かの判定用。最後の1件だけだと、
+ * 先に503だったスロットがあっても最後が400なら再試行不要と誤判定するため）。
  */
 class AllAiProvidersFailedException(
     val attempts: Int,
     cause: Throwable?,
+    val allCauses: List<Throwable> = listOfNotNull(cause),
 ) : Exception(
     buildMessage(attempts, cause),
     cause,

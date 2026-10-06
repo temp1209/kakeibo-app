@@ -125,8 +125,12 @@ fun ReceiptsListScreen(
 
     val yearMonthArg = selectedMonth?.toString().orEmpty()
 
+    // 一括再送信の対象件数。検索語の入力のたびには数えない（全レシートを読むため）
+    LaunchedEffect(yearMonthArg, reloadTick) {
+        resendTargets = runCatching { countResendTargets?.invoke() ?: 0 }.getOrDefault(0)
+    }
+
     LaunchedEffect(yearMonthArg, searchQuery, reloadTick) {
-        resendTargets = countResendTargets?.invoke() ?: 0
         loading = true
         try {
             rows = if (isSearching) {
@@ -273,10 +277,15 @@ fun ReceiptsListScreen(
                                 onClick = {
                                     scope.launch {
                                         resendBusy = true
-                                        val queued = resendAllFailed()
-                                        resendNotice = "${queued}件を再送信しました。解析が完了するまでお待ちください。"
-                                        resendBusy = false
-                                        reloadTick++
+                                        try {
+                                            val queued = resendAllFailed()
+                                            resendNotice = "${queued}件を再送信しました。解析が完了するまでお待ちください。"
+                                        } catch (e: Exception) {
+                                            resendNotice = "再送信に失敗しました。時間をおいて再度お試しください。"
+                                        } finally {
+                                            resendBusy = false
+                                            reloadTick++
+                                        }
                                     }
                                 },
                             ) { Text(if (resendBusy) "送信中…" else "まとめて再送信") }
