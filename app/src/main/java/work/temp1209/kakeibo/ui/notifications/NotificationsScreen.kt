@@ -42,12 +42,15 @@ import work.temp1209.kakeibo.ui.format.formatYen
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.prefs.GeminiApiKeyStore
 import work.temp1209.kakeibo.data.db.ReceiptEntity
+import work.temp1209.kakeibo.data.notifications.NotificationHistory
 import work.temp1209.kakeibo.data.notifications.NotificationHistoryEntry
 
 private data class NotificationTabSnapshot(
     val queueCount: Int,
     val latestError: String?,
     val failed: List<ReceiptEntity>,
+    /** 「まとめて再送信」で再送信できる件数（全期間。画像が残っていないものなどは含まない） */
+    val resendTargets: Int,
     val needsReview: List<ReceiptEntity>,
     val history: List<NotificationHistoryEntry>,
 )
@@ -56,10 +59,11 @@ private suspend fun loadNotificationTabSnapshot(repo: ReceiptRepository): Notifi
     val queueCount = repo.queueInFlightCount()
     val latestError = repo.latestQueueErrorOrNull()
     val failed = repo.listFailedForResend(limit = 30)
+    val resendTargets = repo.countBulkResendTargets()
     val needsReview = repo.listNeedsReview(limit = 30)
         .filter { it.analysisStatus != "FAILED" }
     val history = repo.listNotificationHistory()
-    return NotificationTabSnapshot(queueCount, latestError, failed, needsReview, history)
+    return NotificationTabSnapshot(queueCount, latestError, failed, resendTargets, needsReview, history)
 }
 
 @Composable
@@ -81,7 +85,13 @@ private fun NotificationHistoryCard(
         enabled = receipt != null,
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            NotificationEventBadge(eventType = entry.event.eventType, small = true)
+            NotificationEventBadge(
+                eventType = NotificationHistory.historyDisplayType(
+                    eventType = entry.event.eventType,
+                    receiptStatus = receipt?.analysisStatus,
+                ),
+                small = true,
+            )
             Text("店名: $merchant")
             Text("合計: ${formatYen(total)}")
             Text(
@@ -149,6 +159,8 @@ fun NotificationsScreen(
     var queueCount by remember { mutableStateOf(0) }
     var latestError by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
+    var resendTargets by remember { mutableStateOf(0) }
+    var bulkResendBusy by remember { mutableStateOf(false) }
     var needsReview by remember { mutableStateOf<List<ReceiptEntity>>(emptyList()) }
     var history by remember { mutableStateOf<List<NotificationHistoryEntry>>(emptyList()) }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -181,6 +193,7 @@ fun NotificationsScreen(
         queueCount = s.queueCount
         latestError = s.latestError
         failed = s.failed
+        resendTargets = s.resendTargets
         needsReview = s.needsReview
         history = s.history
     }
@@ -237,14 +250,45 @@ fun NotificationsScreen(
         }
 
         item {
-            Text("解析失敗: ${failed.size}件", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("解析失敗: ${failed.size}件", style = MaterialTheme.typography.titleSmall)
+                if (resendTargets > 0) {
+                    TextButton(
+                        enabled = !bulkResendBusy && resendInFlightId == null,
+                        onClick = {
+                            scope.launch {
+                                bulkResendBusy = true
+                                try {
+                                    val queued = repo.resendAllFailedAnalysis()
+                                    resendMessage = if (queued > 0) {
+                                        "${queued}件を再送信しました。解析が完了するまでお待ちください。"
+                                    } else {
+                                        "再送信できるレシートがありませんでした。"
+                                    }
+                                    applySnapshot(loadNotificationTabSnapshot(repo))
+                                } catch (e: Exception) {
+                                    resendMessage = "再送信に失敗しました。時間をおいて再度お試しください。"
+                                } finally {
+                                    bulkResendBusy = false
+                                }
+                            }
+                        },
+                    ) {
+                        Text(if (bulkResendBusy) "送信中…" else "まとめて再送信（${resendTargets}件）")
+                    }
+                }
+            }
         }
         if (failed.isEmpty()) {
             item { Text("解析失敗のレシートはありません。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
             items(failed, key = { "failed:${it.receiptId}" }) { r ->
                 val resendEnabled =
-                    resendInFlightId == null &&
+                    resendInFlightId == null && !bulkResendBusy &&
                         System.currentTimeMillis() >= resendCooldownUntil
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),

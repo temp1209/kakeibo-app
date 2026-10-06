@@ -42,7 +42,7 @@ fun NotificationEventBadge(
 private fun notificationEventColors(eventType: String): Pair<Color, Color> {
     val scheme = MaterialTheme.colorScheme
     return when (eventType) {
-        NotificationHistory.TYPE_DONE ->
+        NotificationHistory.TYPE_DONE, NotificationHistory.DISPLAY_FAILED_THEN_DONE ->
             scheme.tertiaryContainer to scheme.onTertiaryContainer
         NotificationHistory.TYPE_NEEDS_REVIEW, NotificationHistory.TYPE_FAILED ->
             scheme.errorContainer to scheme.onErrorContainer
