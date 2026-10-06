@@ -23,6 +23,9 @@ import work.temp1209.kakeibo.data.db.AppDatabase
 import work.temp1209.kakeibo.data.ReceiptRepository
 import work.temp1209.kakeibo.data.notifications.NotificationHistory
 import work.temp1209.kakeibo.ui.notifications.AnalysisNotifications
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
@@ -32,21 +35,27 @@ class AnalysisWorker(
 ) : CoroutineWorker(appContext, params) {
     private val notificationPrefs = NotificationPrefs(appContext)
 
-    override suspend fun doWork(): Result {
+    // 通常の解析Workと再試行用Workが同時に走ってもキューを二重処理しないよう、同一プロセス内で直列化する
+    override suspend fun doWork(): Result = runMutex.withLock { processQueue() }
+
+    private suspend fun processQueue(): Result {
         val dao = AppDatabase.get(applicationContext).receiptDao()
         val providerStore = AiProviderStore(applicationContext)
         val router = AiRequestRouter(providerStore)
+        val repo = ReceiptRepository(applicationContext)
 
-        val recovered = ReceiptRepository(applicationContext).recoverOrphanedRunningEntries()
+        val recovered = repo.recoverOrphanedRunningEntries()
         if (recovered > 0) {
             Log.w(TAG, "recovered orphaned RUNNING entries count=$recovered")
         }
+        val promoted = repo.promoteDueRetryEntries()
+        if (promoted > 0) {
+            Log.d(TAG, "promoted due retry entries count=$promoted")
+        }
 
         Log.d(TAG, "doWork start")
-        // 一時的な失敗で再試行待ちにしたキュー。この実行中は取り直さず、WorkManagerのバックオフ後に再実行する
-        val deferredQueueIds = mutableListOf<String>()
         while (true) {
-            val entry = dao.getNextQueuedExcluding(deferredQueueIds) ?: break
+            val entry = dao.getNextQueuedOrNull() ?: break
             if (!providerStore.hasEnabledSlot()) {
                 handleMissingApiKeyFailure(dao = dao, entry = entry)
                 continue
@@ -227,15 +236,16 @@ class AnalysisWorker(
             } catch (e: Exception) {
                 val msg = GeminiUserMessages.userFacingError(e, GeminiUserMessages.Operation.RECEIPT_ANALYSIS)
                 Log.w(TAG, "failed receiptId=${entry.receiptId} attempt=$attempt error=$msg", e)
-                if (GeminiUserMessages.isTransientFailure(e) && attempt < MAX_AUTO_ATTEMPTS) {
-                    // Google側の過負荷(503)等は待てば直ることが多いので、FAILEDに確定せずキューへ戻す。
-                    // レシートの状態は変えない（通知も出さない）。上限回数に達したら従来どおりFAILEDにする。
-                    dao.requeue(
+                val retryDelayMinutes = if (GeminiUserMessages.isTransientFailure(e)) retryDelayMinutes(attempt) else null
+                if (retryDelayMinutes != null) {
+                    // Google側の過負荷(503)等は数分では直らないことが多いので、FAILEDに確定せず間隔を空けて再試行する。
+                    // レシートの状態は変えない（通知も出さない）。待ち時間を使い切ったら従来どおりFAILEDにする。
+                    dao.markRetryWait(
                         queueId = entry.queueId,
                         attemptCount = attempt,
-                        lastError = "一時的なエラーのため自動で再試行します（$attempt/$MAX_AUTO_ATTEMPTS 回目失敗）",
+                        retryAt = Instant.now().plus(Duration.ofMinutes(retryDelayMinutes)).toString(),
+                        lastError = "一時的なエラー（${attempt}回目の失敗）のため${retryDelayMinutes}分後に自動で再試行します",
                     )
-                    deferredQueueIds += entry.queueId
                     continue
                 }
                 val finishedAt = Instant.now().toString()
@@ -269,11 +279,9 @@ class AnalysisWorker(
             }
         }
 
-        if (deferredQueueIds.isNotEmpty()) {
-            Log.d(TAG, "doWork end: ${deferredQueueIds.size} entries deferred, scheduling retry")
-            return Result.retry()
-        }
         Log.d(TAG, "doWork end (no more queued)")
+        // 再試行待ちが残っていれば、最も早い期限に起こす再試行Workを予約する（最後に呼ぶこと。自分自身を置き換えうる）
+        repo.scheduleRetryWakeIfNeeded(selfIsRetryWake = inputData.getBoolean(KEY_RETRY_WAKE, false))
         return Result.success()
     }
 
@@ -392,8 +400,23 @@ class AnalysisWorker(
 
         private const val TAG = "AnalysisWorker"
 
-        /** 一時的な失敗（503等）を自動再試行する最大回数。これに達したら解析失敗（FAILED）に確定する。 */
-        const val MAX_AUTO_ATTEMPTS = 5
+        /**
+         * 一時的な失敗（503等）の自動再試行の待ち時間（分）。n回目の失敗のあと、n番目の値だけ待って再試行する。
+         * 全部使い切った（＝この回数+1回失敗した）ら解析失敗（FAILED）に確定する。
+         * 数分後の再送では直らないことが多いため、間隔を長めに取っている（本人の指定）。
+         */
+        val RETRY_DELAYS_MINUTES = listOf(5L, 10L, 20L, 40L, 60L)
+
+        /** [attempt]回目の失敗後の待ち時間（分）。待ち時間を使い切っていたら null（＝FAILEDに確定する）。 */
+        fun retryDelayMinutes(attempt: Int): Long? = RETRY_DELAYS_MINUTES.getOrNull(attempt - 1)
+
+        /** 再試行用Workであることを示す入力データのキー */
+        const val KEY_RETRY_WAKE = "retryWake"
+
+        /** キューの状態: 一時的な失敗で再試行を待っている（期限は `finishedAt` に ISO 形式で入れる） */
+        const val STATUS_RETRY_WAIT = "RETRY_WAIT"
+
+        private val runMutex = Mutex()
 
         /** レシート不在で確定した失敗のメッセージ。再送信しても結果は変わらないので一括再送信の対象から外す。 */
         const val NO_RECEIPT_USER_MESSAGE = "画像にレシートが見当たりません。別の画像で試してください。"

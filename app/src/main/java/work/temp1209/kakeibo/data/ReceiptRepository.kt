@@ -4,8 +4,9 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
-import androidx.work.BackoffPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.WorkInfo
+import androidx.work.workDataOf
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -49,11 +50,21 @@ fun isImageCleanupEligible(analysisStatus: String?): Boolean =
     analysisStatus != "PENDING" && analysisStatus != "RUNNING"
 
 /**
- * 投入から[staleAfter]以上経っても未処理（QUEUED/RUNNING）のキューは異常（バグ）とみなす。
+ * 投入から[staleAfter]以上経っても未処理（QUEUED/RUNNING/RETRY_WAIT）のキューは異常（バグ）とみなす。
  * オフラインが原因なら数日以内に解消するはずなので、この判定はオフライン許容とは別軸。
  */
 fun isQueueEntryStale(status: String, queuedAt: Instant, now: Instant, staleAfter: Duration): Boolean =
-    (status == "QUEUED" || status == "RUNNING") && queuedAt.isBefore(now.minus(staleAfter))
+    (status == "QUEUED" || status == "RUNNING" || status == AnalysisWorker.STATUS_RETRY_WAIT) &&
+        queuedAt.isBefore(now.minus(staleAfter))
+
+/**
+ * RETRY_WAIT の再試行期限（`finishedAt` に入れた ISO 形式）が [now] に達しているか。
+ * 期限が無い・読めない場合は、待たせ続けて固まらないよう「期限到来」として扱う。
+ */
+fun isRetryDue(retryAt: String?, now: Instant): Boolean {
+    val due = retryAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return true
+    return !due.isAfter(now)
+}
 
 /**
  * RUNNING のまま [orphanAfter] 以上経過したキューは、WorkManagerの実行時間上限などで
@@ -250,8 +261,6 @@ class ReceiptRepository(private val context: Context) {
             .build()
         val request = OneTimeWorkRequestBuilder<AnalysisWorker>()
             .setConstraints(constraints)
-            // 一時的な失敗（503等）で Result.retry() したときの待ち時間: 1→2→4→8分
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, java.util.concurrent.TimeUnit.MINUTES)
             .build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(
@@ -259,6 +268,46 @@ class ReceiptRepository(private val context: Context) {
                 ExistingWorkPolicy.KEEP,
                 request,
             )
+    }
+
+    /**
+     * 期限が来た RETRY_WAIT のキューを QUEUED に戻す。
+     * 通常の解析Workが新しいレシートの処理のついでに呼んでも害はない（期限前のものは触らない）。
+     * @return QUEUED に戻した件数
+     */
+    suspend fun promoteDueRetryEntries(now: Instant = Instant.now()): Int = withContext(Dispatchers.IO) {
+        val due = dao.listRetryWait().filter { isRetryDue(it.finishedAt, now) }
+        for (entry in due) {
+            dao.requeue(queueId = entry.queueId, attemptCount = entry.attemptCount, lastError = entry.lastError)
+        }
+        due.size
+    }
+
+    /**
+     * RETRY_WAIT が残っていれば、最も早い期限に起動する再試行用Workを予約する（無ければ何もしない）。
+     * 通常の解析Workとは別の一意名で予約するので、待っている間に撮った新しいレシートは待たされない。
+     *
+     * 予約は REPLACE なので、実行中の再試行用Workを巻き込んで中断しないよう、
+     * 呼び出し元が再試行用Work自身でない場合は実行中なら予約しない（その Work が終了時に自分で予約し直す）。
+     */
+    suspend fun scheduleRetryWakeIfNeeded(selfIsRetryWake: Boolean = false) = withContext(Dispatchers.IO) {
+        val earliest = dao.listRetryWait()
+            .map { it.finishedAt?.let { s -> runCatching { Instant.parse(s) }.getOrNull() } ?: Instant.EPOCH }
+            .minOrNull()
+            ?: return@withContext
+        val wm = WorkManager.getInstance(context)
+        if (!selfIsRetryWake) {
+            val running = wm.getWorkInfosForUniqueWork(RETRY_WORK_NAME).get().any { it.state == WorkInfo.State.RUNNING }
+            if (running) return@withContext
+        }
+        val delayMs = Duration.between(Instant.now(), earliest).toMillis().coerceAtLeast(0L)
+        Log.d(TAG, "scheduleRetryWake delayMs=$delayMs")
+        val request = OneTimeWorkRequestBuilder<AnalysisWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .setInputData(workDataOf(AnalysisWorker.KEY_RETRY_WAKE to true))
+            .build()
+        wm.enqueueUniqueWork(RETRY_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
     suspend fun listReceipts() = withContext(Dispatchers.IO) {
@@ -696,7 +745,7 @@ class ReceiptRepository(private val context: Context) {
     /**
      * Phase 6.2: 解析失敗レシートを手動で再送信する。
      * - キューを QUEUED に戻し attemptCount をリセット
-     * - 一時的な失敗（503等）の自動再試行は AnalysisWorker 側で行う（[AnalysisWorker.MAX_AUTO_ATTEMPTS] 回まで）
+     * - 一時的な失敗（503等）の自動再試行は AnalysisWorker 側で行う（[AnalysisWorker.RETRY_DELAYS_MINUTES] の間隔で最大5回）
      */
     suspend fun resendAnalysis(receiptId: String): ResendAnalysisResult = withContext(Dispatchers.IO) {
         val existing = dao.getReceiptOrNull(receiptId)
@@ -902,7 +951,8 @@ class ReceiptRepository(private val context: Context) {
     companion object {
         private const val TAG = "ReceiptRepo"
         private const val UNIQUE_WORK_NAME = "analysis-queue"
-        private val IN_FLIGHT_QUEUE_STATUSES = setOf("QUEUED", "RUNNING")
+        private const val RETRY_WORK_NAME = "analysis-queue-retry"
+        private val IN_FLIGHT_QUEUE_STATUSES = setOf("QUEUED", "RUNNING", AnalysisWorker.STATUS_RETRY_WAIT)
     }
 }
 

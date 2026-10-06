@@ -161,6 +161,8 @@ private fun AppNav(
         val recovered = repo.recoverOrphanedRunningEntries()
         repo.failStaleQueueEntries()
         repo.cleanupExpiredImages()
+        // 再試行待ちの予約が失われていても、起動のたびに張り直して固まらないようにする
+        repo.scheduleRetryWakeIfNeeded()
         if (recovered > 0) {
             repo.scheduleAnalysisWork()
         }

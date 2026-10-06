@@ -173,12 +173,18 @@ interface ReceiptDao {
     @Query("SELECT * FROM analysis_queue WHERE status = 'QUEUED' ORDER BY queuedAt ASC LIMIT 1")
     suspend fun getNextQueuedOrNull(): AnalysisQueueEntity?
 
-    /** 今回の実行で再試行待ちにしたもの（[excludeIds]）を除いた、次のQUEUED。 */
-    @Query("SELECT * FROM analysis_queue WHERE status = 'QUEUED' AND queueId NOT IN (:excludeIds) ORDER BY queuedAt ASC LIMIT 1")
-    suspend fun getNextQueuedExcluding(excludeIds: List<String>): AnalysisQueueEntity?
+    /**
+     * 一時的な失敗（503等）で、[retryAt]（ISO形式）まで再試行を待つ状態にする。
+     * 待機中は `finishedAt` を使っていないので、そこに期限を入れる（スキーマ変更を避けるため）。
+     */
+    @Query("UPDATE analysis_queue SET status = 'RETRY_WAIT', attemptCount = :attemptCount, lastError = :lastError, startedAt = NULL, finishedAt = :retryAt WHERE queueId = :queueId")
+    suspend fun markRetryWait(queueId: String, attemptCount: Int, retryAt: String, lastError: String?)
 
-    /** 未処理（QUEUED/RUNNING）のキュー一覧。長期未処理の検出は呼び出し側の [ReceiptRepository] で判定する。 */
-    @Query("SELECT * FROM analysis_queue WHERE status IN ('QUEUED', 'RUNNING')")
+    @Query("SELECT * FROM analysis_queue WHERE status = 'RETRY_WAIT'")
+    suspend fun listRetryWait(): List<AnalysisQueueEntity>
+
+    /** 未処理（QUEUED/RUNNING/RETRY_WAIT）のキュー一覧。長期未処理の検出は呼び出し側の [ReceiptRepository] で判定する。 */
+    @Query("SELECT * FROM analysis_queue WHERE status IN ('QUEUED', 'RUNNING', 'RETRY_WAIT')")
     suspend fun listInFlightQueueEntries(): List<AnalysisQueueEntity>
 
     @Query("UPDATE analysis_queue SET status = :status, startedAt = :startedAt WHERE queueId = :queueId")
@@ -200,7 +206,7 @@ interface ReceiptDao {
     )
     suspend fun resetQueueForResend(receiptId: String, queuedAt: String): Int
 
-    @Query("SELECT COUNT(*) FROM analysis_queue WHERE status IN ('QUEUED','RUNNING')")
+    @Query("SELECT COUNT(*) FROM analysis_queue WHERE status IN ('QUEUED','RUNNING','RETRY_WAIT')")
     suspend fun countQueueInFlight(): Int
 
     @Query("SELECT lastError FROM analysis_queue WHERE lastError IS NOT NULL ORDER BY queuedAt DESC LIMIT 1")

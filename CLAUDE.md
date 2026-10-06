@@ -90,7 +90,7 @@ Kotlin単体テストは `app/src/test/java/work/temp1209/kakeibo/` 配下（JVM
   → OS通知 + 一覧/分析タブへ反映
 ```
 
-`AnalysisWorker`（`data/analysis/AnalysisWorker.kt`）がこのフローの中心。`analysis_queue` テーブルをポーリングし1件ずつ順次処理する（PENDING/RUNNING/DONE/FAILED/NEEDS_REVIEW の状態遷移）。API未設定・レシート不在(`NO_RECEIPT`)・その他例外はそれぞれ専用のハンドラでFAILED確定し、ユーザー向けメッセージと通知履歴を残す。ただしGoogle側の過負荷(503)・429・タイムアウト・通信エラーのような一時的な失敗（`GeminiUserMessages.isTransientFailure`）は、FAILEDにせずキューへ戻して `Result.retry()`（バックオフ1→2→4→8分、最大 `AnalysisWorker.MAX_AUTO_ATTEMPTS`=5回）で自動再試行し、上限に達して初めてFAILEDにする。一覧タブには失敗レシートの一括再送信の帯がある（`ReceiptRepository.resendAllFailedAnalysis`。レシート不在で確定したものは対象外）。キュー投入は `WorkManager.enqueueUniqueWork(..., ExistingWorkPolicy.KEEP, ...)`（`NetworkType.CONNECTED` 制約付き）。投入から7日超のQUEUED/RUNNINGはアプリ起動時に `failStaleQueueEntries()` で強制失敗させる保険がある（`ReceiptRepository.kt`）。
+`AnalysisWorker`（`data/analysis/AnalysisWorker.kt`）がこのフローの中心。`analysis_queue` テーブルをポーリングし1件ずつ順次処理する（PENDING/RUNNING/DONE/FAILED/NEEDS_REVIEW の状態遷移）。API未設定・レシート不在(`NO_RECEIPT`)・その他例外はそれぞれ専用のハンドラでFAILED確定し、ユーザー向けメッセージと通知履歴を残す。ただしGoogle側の過負荷(503)・429・タイムアウト・通信エラーのような一時的な失敗（`GeminiUserMessages.isTransientFailure`）は、FAILEDにせず `RETRY_WAIT` 状態（期限は `finishedAt` に保持、スキーマ変更なし）にして、5→10→20→40→60分の間隔（`AnalysisWorker.RETRY_DELAYS_MINUTES`）で自動再試行し、使い切って初めてFAILEDにする。再試行は通常の解析Workとは別の一意名のWork（`analysis-queue-retry`、`ReceiptRepository.scheduleRetryWakeIfNeeded`）で起こすので、待機中に撮った新しいレシートは待たされない。両Workは `AnalysisWorker` 内のMutexで直列化している。一覧タブには失敗レシートの一括再送信の帯がある（`ReceiptRepository.resendAllFailedAnalysis`。レシート不在で確定したものは対象外）。キュー投入は `WorkManager.enqueueUniqueWork(..., ExistingWorkPolicy.KEEP, ...)`（`NetworkType.CONNECTED` 制約付き）。投入から7日超のQUEUED/RUNNING/RETRY_WAITはアプリ起動時に `failStaleQueueEntries()` で強制失敗させる保険がある（`ReceiptRepository.kt`）。
 
 ### AIプロバイダ層（`data/ai/`）
 
