@@ -473,6 +473,8 @@ private fun AppNav(
                     onSearchQueryChange = { listSearchQuery = it },
                     onOpenReceipt = { id -> navController.navigate(Route.ReceiptDetail.create(id)) },
                     onOpenAddExpenseSheet = { addExpenseSheetOpen = true },
+                    countResendTargets = { repo.countBulkResendTargets() },
+                    resendAllFailed = { repo.resendAllFailedAnalysis() },
                 )
             }
 

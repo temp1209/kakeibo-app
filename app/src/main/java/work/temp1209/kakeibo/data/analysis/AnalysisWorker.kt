@@ -43,8 +43,10 @@ class AnalysisWorker(
         }
 
         Log.d(TAG, "doWork start")
+        // 一時的な失敗で再試行待ちにしたキュー。この実行中は取り直さず、WorkManagerのバックオフ後に再実行する
+        val deferredQueueIds = mutableListOf<String>()
         while (true) {
-            val entry = dao.getNextQueuedOrNull() ?: break
+            val entry = dao.getNextQueuedExcluding(deferredQueueIds) ?: break
             if (!providerStore.hasEnabledSlot()) {
                 handleMissingApiKeyFailure(dao = dao, entry = entry)
                 continue
@@ -225,6 +227,17 @@ class AnalysisWorker(
             } catch (e: Exception) {
                 val msg = GeminiUserMessages.userFacingError(e, GeminiUserMessages.Operation.RECEIPT_ANALYSIS)
                 Log.w(TAG, "failed receiptId=${entry.receiptId} attempt=$attempt error=$msg", e)
+                if (GeminiUserMessages.isTransientFailure(e) && attempt < MAX_AUTO_ATTEMPTS) {
+                    // Google側の過負荷(503)等は待てば直ることが多いので、FAILEDに確定せずキューへ戻す。
+                    // レシートの状態は変えない（通知も出さない）。上限回数に達したら従来どおりFAILEDにする。
+                    dao.requeue(
+                        queueId = entry.queueId,
+                        attemptCount = attempt,
+                        lastError = "一時的なエラーのため自動で再試行します（$attempt/$MAX_AUTO_ATTEMPTS 回目失敗）",
+                    )
+                    deferredQueueIds += entry.queueId
+                    continue
+                }
                 val finishedAt = Instant.now().toString()
                 val existing = dao.getReceiptOrNull(entry.receiptId)
                 val failedReceipt = existing?.copy(
@@ -256,6 +269,10 @@ class AnalysisWorker(
             }
         }
 
+        if (deferredQueueIds.isNotEmpty()) {
+            Log.d(TAG, "doWork end: ${deferredQueueIds.size} entries deferred, scheduling retry")
+            return Result.retry()
+        }
         Log.d(TAG, "doWork end (no more queued)")
         return Result.success()
     }
@@ -311,7 +328,7 @@ class AnalysisWorker(
         val finishedAt = Instant.now().toString()
         val receiptId = entry.receiptId
         val existing = dao.getReceiptOrNull(receiptId) ?: return
-        val message = "画像にレシートが見当たりません。別の画像で試してください。"
+        val message = NO_RECEIPT_USER_MESSAGE
         dao.insertGeminiResult(
             GeminiResultEntity(
                 resultId = UUID.randomUUID().toString(),
@@ -374,6 +391,12 @@ class AnalysisWorker(
             receipt?.inputKind != "MANUAL_NO_RECEIPT"
 
         private const val TAG = "AnalysisWorker"
+
+        /** 一時的な失敗（503等）を自動再試行する最大回数。これに達したら解析失敗（FAILED）に確定する。 */
+        const val MAX_AUTO_ATTEMPTS = 5
+
+        /** レシート不在で確定した失敗のメッセージ。再送信しても結果は変わらないので一括再送信の対象から外す。 */
+        const val NO_RECEIPT_USER_MESSAGE = "画像にレシートが見当たりません。別の画像で試してください。"
 
         private fun modelNameForProvider(@Suppress("UNUSED_PARAMETER") providerId: String): String =
             GeminiAiProvider.MODEL_NAME

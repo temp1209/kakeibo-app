@@ -173,6 +173,10 @@ interface ReceiptDao {
     @Query("SELECT * FROM analysis_queue WHERE status = 'QUEUED' ORDER BY queuedAt ASC LIMIT 1")
     suspend fun getNextQueuedOrNull(): AnalysisQueueEntity?
 
+    /** 今回の実行で再試行待ちにしたもの（[excludeIds]）を除いた、次のQUEUED。 */
+    @Query("SELECT * FROM analysis_queue WHERE status = 'QUEUED' AND queueId NOT IN (:excludeIds) ORDER BY queuedAt ASC LIMIT 1")
+    suspend fun getNextQueuedExcluding(excludeIds: List<String>): AnalysisQueueEntity?
+
     /** 未処理（QUEUED/RUNNING）のキュー一覧。長期未処理の検出は呼び出し側の [ReceiptRepository] で判定する。 */
     @Query("SELECT * FROM analysis_queue WHERE status IN ('QUEUED', 'RUNNING')")
     suspend fun listInFlightQueueEntries(): List<AnalysisQueueEntity>

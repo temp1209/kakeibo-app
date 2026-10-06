@@ -68,6 +68,23 @@ object GeminiUserMessages {
         }
     }
 
+    /**
+     * 待てば直る可能性が高い失敗か（Google側の過負荷503・利用上限429・5xx・タイムアウト・通信エラー）。
+     * ルータが全スロット失敗で投げる [AllAiProvidersFailedException] の原因のみを見る。
+     * 画像読込失敗・解析結果の不正・400/401/403/404 のような再試行しても直らない失敗は false。
+     */
+    fun isTransientFailure(throwable: Throwable): Boolean {
+        val allFailed = throwable as? AllAiProvidersFailedException ?: return false
+        val root = allFailed.cause ?: return false
+        if (root is java.io.IOException) return true
+        val msg = root.message.orEmpty()
+        return isRateLimited(root) ||
+            msg.contains("timeout", ignoreCase = true) ||
+            TRANSIENT_HTTP_STATUS.containsMatchIn(msg)
+    }
+
+    private val TRANSIENT_HTTP_STATUS = Regex("""HTTP (429|5\d\d)\b""")
+
     fun isRateLimited(throwable: Throwable): Boolean {
         if (isRateLimited(throwable.message.orEmpty())) return true
         val cause = throwable.cause ?: return false

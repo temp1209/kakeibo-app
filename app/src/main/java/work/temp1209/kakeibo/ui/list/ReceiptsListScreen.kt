@@ -26,12 +26,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
@@ -103,8 +107,17 @@ fun ReceiptsListScreen(
     onSearchQueryChange: (String) -> Unit,
     onOpenReceipt: (String) -> Unit,
     onOpenAddExpenseSheet: (() -> Unit)? = null,
+    /** 一括再送信の対象件数（全期間）。null なら一括再送信の帯を出さない */
+    countResendTargets: (suspend () -> Int)? = null,
+    /** 解析失敗をまとめて再送信し、キューに入れた件数を返す */
+    resendAllFailed: (suspend () -> Int)? = null,
 ) {
     var rows by remember { mutableStateOf<List<ReceiptListRow>>(emptyList()) }
+    var reloadTick by remember { mutableIntStateOf(0) }
+    var resendTargets by remember { mutableIntStateOf(0) }
+    var resendBusy by remember { mutableStateOf(false) }
+    var resendNotice by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val isSearching = searchBarVisible && searchQuery.isNotBlank()
     val selectedMonth: YearMonth? =
         if (periodKey == RECEIPTS_LIST_PERIOD_ALL) null else runCatching { YearMonth.parse(periodKey) }.getOrNull()
@@ -112,7 +125,8 @@ fun ReceiptsListScreen(
 
     val yearMonthArg = selectedMonth?.toString().orEmpty()
 
-    LaunchedEffect(yearMonthArg, searchQuery) {
+    LaunchedEffect(yearMonthArg, searchQuery, reloadTick) {
+        resendTargets = countResendTargets?.invoke() ?: 0
         loading = true
         try {
             rows = if (isSearching) {
@@ -234,6 +248,42 @@ fun ReceiptsListScreen(
                 }
             }
         }
+
+            if (resendAllFailed != null && (resendTargets > 0 || resendNotice != null)) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = resendNotice ?: "解析に失敗したレシートが${resendTargets}件あります",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (resendTargets > 0) {
+                            TextButton(
+                                enabled = !resendBusy,
+                                onClick = {
+                                    scope.launch {
+                                        resendBusy = true
+                                        val queued = resendAllFailed()
+                                        resendNotice = "${queued}件を再送信しました。解析が完了するまでお待ちください。"
+                                        resendBusy = false
+                                        reloadTick++
+                                    }
+                                },
+                            ) { Text(if (resendBusy) "送信中…" else "まとめて再送信") }
+                        }
+                    }
+                }
+            }
 
             when {
                 loading -> {

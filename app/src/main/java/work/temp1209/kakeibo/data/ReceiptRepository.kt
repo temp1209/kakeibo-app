@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import androidx.work.BackoffPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
@@ -249,6 +250,8 @@ class ReceiptRepository(private val context: Context) {
             .build()
         val request = OneTimeWorkRequestBuilder<AnalysisWorker>()
             .setConstraints(constraints)
+            // 一時的な失敗（503等）で Result.retry() したときの待ち時間: 1→2→4→8分
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, java.util.concurrent.TimeUnit.MINUTES)
             .build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(
@@ -693,7 +696,7 @@ class ReceiptRepository(private val context: Context) {
     /**
      * Phase 6.2: 解析失敗レシートを手動で再送信する。
      * - キューを QUEUED に戻し attemptCount をリセット
-     * - 自動リトライは行わない（AnalysisWorker 側で1回のみ実行）
+     * - 一時的な失敗（503等）の自動再試行は AnalysisWorker 側で行う（[AnalysisWorker.MAX_AUTO_ATTEMPTS] 回まで）
      */
     suspend fun resendAnalysis(receiptId: String): ResendAnalysisResult = withContext(Dispatchers.IO) {
         val existing = dao.getReceiptOrNull(receiptId)
@@ -742,6 +745,35 @@ class ReceiptRepository(private val context: Context) {
         scheduleAnalysisWork()
         Log.d(TAG, "resendAnalysis receiptId=$receiptId")
         ResendAnalysisResult.Success
+    }
+
+    /**
+     * 一括再送信の対象（解析失敗で、再送信すれば結果が変わりうるもの）か。
+     * 削除済み・手入力・「画像にレシートが見当たりません」で確定したものは除く。
+     */
+    private fun isBulkResendTarget(r: ReceiptEntity): Boolean =
+        r.deletedAt == null &&
+            r.analysisStatus == "FAILED" &&
+            r.inputKind != "MANUAL_NO_RECEIPT" &&
+            r.analysisErrorMessage != AnalysisWorker.NO_RECEIPT_USER_MESSAGE
+
+    /** 一括再送信の対象件数（全期間）。 */
+    suspend fun countBulkResendTargets(): Int = withContext(Dispatchers.IO) {
+        dao.listReceipts().count(::isBulkResendTarget)
+    }
+
+    /**
+     * 解析失敗のレシートをまとめて再送信する。1件ごとの処理は [resendAnalysis] と同じ
+     * （レシート本体・明細は変更せず、解析ステータスとキューだけを戻す）。
+     * @return 再送信をキューに入れた件数
+     */
+    suspend fun resendAllFailedAnalysis(): Int = withContext(Dispatchers.IO) {
+        var queued = 0
+        for (r in dao.listReceipts().filter(::isBulkResendTarget)) {
+            if (resendAnalysis(r.receiptId) == ResendAnalysisResult.Success) queued++
+        }
+        Log.d(TAG, "resendAllFailedAnalysis queued=$queued")
+        queued
     }
 
     fun necessityPolicyStore(): NecessityPolicyStore = NecessityPolicyStore(context)
